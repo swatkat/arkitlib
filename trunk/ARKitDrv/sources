@@ -1,0 +1,5 @@
+TARGETNAME=ARKitDrv
+TARGETPATH=obj
+TARGETTYPE=DRIVER
+SOURCES=xde.c Utils.c Lists.c Ps.c Drv.c Hooks.c ARKitDrv.c
+
