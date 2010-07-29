@@ -225,4 +225,42 @@ typedef PPEB (*PSGETPROCESSPB)( IN PEPROCESS Process );
 VOID KeUnstackDetachProcess( IN PKAPC_STATE ApcState );
 typedef VOID (*KEUNSTACKDETACHPROCESS)( IN PKAPC_STATE  ApcState );
 
+NTSYSAPI
+NTSTATUS
+NTAPI 
+ZwOpenProcess(
+              OUT PHANDLE ProcessHandle, 
+              IN ACCESS_MASK DesiredAccess, 
+              IN POBJECT_ATTRIBUTES ObjectAttributes, 
+              IN PCLIENT_ID ClientId OPTIONAL
+              );
+typedef NTSTATUS (NTAPI *PNTOPENPROCESS)(
+                                         OUT PHANDLE ProcessHandle, 
+                                         IN ACCESS_MASK DesiredAccess, 
+                                         IN POBJECT_ATTRIBUTES ObjectAttributes, 
+                                         IN PCLIENT_ID ClientId OPTIONAL
+                                         );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwTerminateProcess(
+                   IN HANDLE   ProcessHandle OPTIONAL,
+                   IN NTSTATUS ExitStatus
+                   );
+typedef NTSTATUS (NTAPI *PNTTERMINATEPROCESS)( 
+                                              IN HANDLE   ProcessHandle OPTIONAL,
+                                              IN NTSTATUS ExitStatus
+                                              );
+
+typedef NTSTATUS (NTAPI *PNTOPENTHREAD)( OUT PHANDLE ThreadHandle,
+                                         IN ACCESS_MASK DesiredAccess,
+                                         IN POBJECT_ATTRIBUTES ObjectAttributes,
+                                         IN PCLIENT_ID ClientId OPTIONAL 
+                                         );
+
+typedef NTSTATUS (NTAPI *PNTTERMINATETHREAD)( IN HANDLE ThreadHandle,
+                                              IN NTSTATUS ExitStatus
+                                              );
+
 #endif // __MY_NTDEFINES_H__

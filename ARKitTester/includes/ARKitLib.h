@@ -52,6 +52,9 @@ public:
     // Method to get running processes
     bool getProcessList( std::list<ARKPROCESS>& procList );
 
+    // Method to kill a process
+    bool killProcess( DWORD dwPid );
+
     // Method to get DLLs loaded for a specified process
     bool getDllList( DWORD dwPid, std::list<ARKDLL>& dllList );
 

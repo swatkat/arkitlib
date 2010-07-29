@@ -13,6 +13,8 @@
 #include "ARKitDefines.h"
 #include "Lists.h"
 
+#define ARKITDRV_DEBUG_PRINT
+
 // Macros
 #define VALIDATE_LIST_BUFF_SIZE( totalBuffSize, dataType, listType ) ( ( totalBuffSize / sizeof( dataType ) ) <= GetListCount( listType ) )
 
@@ -83,6 +85,8 @@ VOID DisableReadOnly();
 VOID EnableReadOnly();
 BOOLEAN IsJumpOutsideKernel( DWORD dwJumpToAddr );
 DWORD GetJumpToAddr( PBYTE pbSrcAddr, int nOpCode );
+NTSTATUS NtZwTerminateProcess( DWORD dwPid );
+NTSTATUS NtZwTerminateProcessByThreads( DWORD dwPid );
 
 
 #endif // __UTILS_H__
