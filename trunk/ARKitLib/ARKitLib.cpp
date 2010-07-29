@@ -449,6 +449,48 @@ bool ARKitLib::getProcessList( std::list<ARKPROCESS>& procList )
 }
 
 /*++
+* @method: ARKitLib::killProcess
+*
+* @description: Kills a process
+*
+* @input: DWORD dwPid
+*
+* @output: true if success, otherwise false
+*
+*--*/
+bool ARKitLib::killProcess( DWORD dwPid )
+{
+    bool retVal = false;
+
+    // Return false if we don't have our device handle
+    if( !ARKITLIB_ISVALIDHANDLE( m_drvHandle ) )
+    {
+        return retVal;
+    }
+
+    if( dwPid && ( dwPid != ::GetCurrentProcessId() ) )
+    {
+        DWORD bytesRet = 0;
+        ARKFIX fixData;
+
+        ::ZeroMemory( &fixData, sizeof( ARKFIX ) );
+        fixData.eType = eArkKillProcess;
+        ::CopyMemory( fixData.fixData, &dwPid, sizeof( DWORD ) );
+
+        BOOL devIoRslt = ::DeviceIoControl( m_drvHandle,
+                                            IOCTL_FIX_ISSUES,
+                                            &fixData,
+                                            sizeof( ARKFIX ),
+                                            NULL,
+                                            0,
+                                            &bytesRet, NULL );
+        retVal = devIoRslt ? true : false;
+    }
+
+    return retVal;
+}
+
+/*++
 * @method: ARKitLib::getDllList
 *
 * @description: Returns DLL list obtained from ARKitDrv for a specific process

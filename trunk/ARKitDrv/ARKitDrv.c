@@ -296,6 +296,31 @@ NTSTATUS DrvDispatch( IN PDEVICE_OBJECT pDevice, IN PIRP pIrp )
             }
             break;
 
+        case IOCTL_FIX_ISSUES:
+            {
+                PARKFIX pFixData = pIrp->AssociatedIrp.SystemBuffer;
+                if( MmIsAddressValid( pFixData ) )
+                {
+                    switch( pFixData->eType )
+                    {
+                    case eArkKillProcess:
+                        {
+                            if( KillProcess( *(PDWORD)(pFixData->fixData) ) )
+                            {
+                                retVal = STATUS_SUCCESS;
+                            }
+                        }
+                        break;
+                    }
+
+                    if( STATUS_SUCCESS == retVal )
+                    {
+                        pIrp->IoStatus.Information = dwInBuffSize;
+                    }
+                }
+            }
+            break;
+
         default:
             {
                 retVal = STATUS_UNSUCCESSFUL;

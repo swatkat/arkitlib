@@ -11,6 +11,7 @@
 extern PDRIVER_OBJECT g_pMyDriverObj;
 extern OS_SPEC_DATA g_globalData;
 extern NTOSKRNLDATA g_NtOSKernel;
+extern ARKNTAPI g_NtApiData;
 
 /*++
 * @method: ScanAndGetProcessCount
@@ -330,6 +331,81 @@ VOID ScanAndGetDllCountThread( PVOID pThrParam )
     __except( EXCEPTION_EXECUTE_HANDLER )
     {
         DbgPrint( "Exception caught in ScanAndGetDllCountThread()" );
+    }
+    PsTerminateSystemThread( STATUS_SUCCESS );
+}
+
+/*++
+* @method: KillProcess
+*
+* @description: Wrapper to thread function to kill a process
+*
+* @input: DWORD dwPid
+*
+* @output: BOOLEAN
+*
+*--*/
+BOOLEAN KillProcess( DWORD dwPid )
+{
+    BOOLEAN bKilled = FALSE;
+    __try
+    {
+        // Create a thread to kill a process
+        THRPARAMS stThrParams = {0};
+        stThrParams.pParam = &dwPid;
+        stThrParams.dwParamLen = sizeof( DWORD );
+        if( STATUS_SUCCESS == ThreadSpooler( KillProcessThread, &stThrParams ) )
+        {
+            bKilled = stThrParams.bResult;
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        bKilled = FALSE;
+        DbgPrint( "Exception caught in KillProcess()" );
+    }
+    return bKilled;
+}
+
+/*++
+* @method: KillProcessThread
+*
+* @description: Kills a process
+*
+* @input: PVOID pThrParam
+*
+* @output: None
+*
+*--*/
+VOID KillProcessThread( PVOID pThrParam )
+{
+    __try
+    {
+        if( MmIsAddressValid( pThrParam ) )
+        {
+            NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+            PTHRPARAMS pParams = (PTHRPARAMS)pThrParam;
+
+            // Try killing process using NtTerminateProcess
+            retVal = NtZwTerminateProcess( *(PDWORD)(pParams->pParam) );
+
+            // If the above method fails, then try killing all
+            // threads of the process
+            if( STATUS_SUCCESS != retVal )
+            {
+                retVal = NtZwTerminateProcessByThreads( *(PDWORD)(pParams->pParam) );
+            }
+
+            // Set the result to true if we are able to kill process
+            if( STATUS_SUCCESS == retVal )
+            {
+                ((PTHRPARAMS)pThrParam)->bResult = TRUE;
+            }
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        DbgPrint( "Exception caught in KillProcessThread()" );
     }
     PsTerminateSystemThread( STATUS_SUCCESS );
 }

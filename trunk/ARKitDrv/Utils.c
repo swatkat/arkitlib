@@ -497,7 +497,7 @@ NTSTATUS GetProcessPathName( PEPROCESS pEproc, char* szProcessImageName, UINT nS
     __except( EXCEPTION_EXECUTE_HANDLER )
     {
         retVal = STATUS_UNSUCCESSFUL;
-        DbgPrint( "Exception caught in GetProcessPathName()" );
+        DbgPrint( "Exception caught in GetProcessPathName() - PEPROCESS 0x%X", pEproc );
     }
     return retVal;
 }
@@ -1008,4 +1008,165 @@ DWORD GetJumpToAddr( PBYTE pbSrcAddr, int nOpCode )
         DbgPrint( "Exception caught in GetJumpToAddr()" );
     }
     return dwJumpTo;
+}
+
+/*++
+* @method: NtZwTerminateProcess
+*
+* @description: Tries to kill process using NtTerminateProcess/ZwTerminateProcess
+*
+* @input: DWORD dwPid
+*
+* @output: NTSTATUS
+*
+* @remarks: We bypass SSDT hooks by using NtXxx routines directly. But, we are not
+*           bypassing inline hooks in these NtXxx routines.
+*
+*--*/
+NTSTATUS NtZwTerminateProcess( DWORD dwPid )
+{
+    NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+    __try
+    {
+        CLIENT_ID procCid;
+        OBJECT_ATTRIBUTES oaProc;
+        HANDLE hProc = NULL;
+        PNTOPENPROCESS pNtOpenProcess = NULL;
+        PNTTERMINATEPROCESS pNtTerminateProcess = NULL;
+
+#ifdef ARKITDRV_DEBUG_PRINT
+        DbgPrint( "NtZwTerminateProcess: Got pid %ld", dwPid );
+#endif // ARKITDRV_DEBUG_PRINT
+
+        // Try to get addresses of NT APIs
+        pNtOpenProcess = (PNTOPENPROCESS)( (PBYTE)pNtOpenProcess + g_NtApiData.dwNtOpenProcess );
+        pNtTerminateProcess = (PNTTERMINATEPROCESS)( (PBYTE)pNtTerminateProcess + g_NtApiData.dwNtTerminateProcess );
+
+        // Build process object attributes
+        InitializeObjectAttributes( &oaProc, NULL, OBJ_KERNEL_HANDLE, NULL, NULL );
+        procCid.UniqueProcess = (HANDLE)dwPid;
+        procCid.UniqueThread = NULL;
+
+        // Open process using NtOpenProcess if we have valid pointer,
+        // otherwise open process using ZwOpenProcess
+        if( MmIsAddressValid( pNtOpenProcess ) )
+        {
+            retVal = pNtOpenProcess( &hProc, PROCESS_ALL_ACCESS, &oaProc, &procCid );
+        }
+        else
+        {
+            retVal = ZwOpenProcess( &hProc, PROCESS_ALL_ACCESS, &oaProc, &procCid );
+        }
+#ifdef ARKITDRV_DEBUG_PRINT
+        DbgPrint( "NtZwTerminateProcess: ZwOpenProcess returned 0x%X, pid %ld, handle 0x%X", retVal, dwPid, hProc );
+#endif // ARKITDRV_DEBUG_PRINT
+        // Terminate process using NtTerminateProcess if we have valid pointer,
+        // otherwise use ZwTerminateProcess.
+        if( STATUS_SUCCESS == retVal )
+        {
+            if( MmIsAddressValid( pNtTerminateProcess ) )
+            {
+                retVal = pNtTerminateProcess( hProc, 0 );
+            }
+            else
+            {
+                retVal = ZwTerminateProcess( hProc, 0 );
+            }
+#ifdef ARKITDRV_DEBUG_PRINT
+        DbgPrint( "NtZwTerminateProcess: ZwTerminateProcess returned 0x%X, pid %ld, handle 0x%X", retVal, dwPid, hProc );
+#endif // ARKITDRV_DEBUG_PRINT
+        ZwClose( hProc );
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = STATUS_UNSUCCESSFUL;
+        DbgPrint( "Exception caught in NtZwTerminateProcess()" );
+    }
+
+    return retVal;
+}
+
+/*++
+* @method: NtZwTerminateProcessByThreads
+*
+* @description: Tries to kill process using NtTerminateThread/ZwTerminateThread on all
+*               threads of the process
+*
+* @input: DWORD dwPid
+*
+* @output: NTSTATUS
+*
+* @remarks: We bypass SSDT hooks by using NtXxx routines directly. But, we are not
+*           bypassing inline hooks in these NtXxx routines.
+*
+*--*/
+NTSTATUS NtZwTerminateProcessByThreads( DWORD dwPid )
+{
+    NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+    __try
+    {
+        DWORD dwTid = 0;
+        CLIENT_ID procCid;
+        OBJECT_ATTRIBUTES oaProc;
+        HANDLE hProc = NULL;
+        PETHREAD pEthread = NULL;
+        PNTOPENTHREAD pNtOpenThread = NULL;
+        PNTTERMINATETHREAD pNtTerminateThread = NULL;
+
+#ifdef ARKITDRV_DEBUG_PRINT
+        DbgPrint( "NtZwTerminateProcessByThreads: Got pid %ld", dwPid );
+#endif // ARKITDRV_DEBUG_PRINT
+
+        // Try to get pointers to NT APIs
+        pNtOpenThread = (PNTOPENTHREAD)( (PBYTE)pNtOpenThread + g_NtApiData.dwNtOpenThread );
+        pNtTerminateThread = (PNTTERMINATETHREAD)( (PBYTE)pNtTerminateThread + g_NtApiData.dwNtTerminateThread );
+
+        if( MmIsAddressValid( pNtOpenThread ) && MmIsAddressValid( pNtTerminateThread ) )
+        {
+            for( dwTid = 0; dwTid < ARKIT_NT_PROCESS_LIMIT; dwTid++ )
+            {
+                retVal = PsLookupThreadByThreadId( (HANDLE)dwTid, &pEthread );
+                if( STATUS_SUCCESS == retVal )
+                {
+                    retVal = STATUS_UNSUCCESSFUL;
+
+                    // If this thread belongs to the process we are looking for, then kill it
+                    if( IsThreadAlive( pEthread ) && ( dwPid == GetPidThr( pEthread ) ) )
+                    {
+                        InitializeObjectAttributes( &oaProc, NULL, OBJ_KERNEL_HANDLE, NULL, NULL );
+                        procCid.UniqueProcess = (HANDLE)dwPid;
+                        procCid.UniqueThread = (HANDLE)dwTid;
+
+                        retVal = pNtOpenThread( &hProc, THREAD_ALL_ACCESS, &oaProc, &procCid );
+#ifdef ARKITDRV_DEBUG_PRINT
+                        DbgPrint( "NtZwTerminateProcessByThreads: NtOpenThread returned 0x%X, pid %ld, handle 0x%X", retVal, dwPid, hProc );
+#endif // ARKITDRV_DEBUG_PRINT
+                        if( STATUS_SUCCESS == retVal )
+                        {
+                            retVal = pNtTerminateThread( hProc, 0 );
+#ifdef ARKITDRV_DEBUG_PRINT
+                            DbgPrint( "NtZwTerminateProcessByThreads: NtTerminateThread returned 0x%X, pid %ld, handle 0x%X", retVal, dwPid, hProc );
+#endif // ARKITDRV_DEBUG_PRINT
+                            ZwClose( hProc );
+                        }
+                    }
+                    ObDereferenceObject( pEthread );
+                }
+                else
+                {
+#ifdef ARKITDRV_DEBUG_PRINT
+                    DbgPrint( "NtZwTerminateProcessByThreads: PsLookupThreadByThreadId returned 0x%X, pid %ld", retVal, dwPid );
+#endif // ARKITDRV_DEBUG_PRINT
+                }
+            }
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = STATUS_UNSUCCESSFUL;
+        DbgPrint( "Exception caught in NtZwTerminateProcessByThreads()" );
+    }
+
+    return retVal;
 }

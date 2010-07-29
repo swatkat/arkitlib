@@ -8,6 +8,8 @@
 #ifndef __ARKITLIBDRVCMN_H__
 #define __ARKITLIBDRVCMN_H__
 
+#include "ARKitDefines.h"
+
 // ARKitDrv driver IOCTL defines
 #define FILE_DEVICE_UNKNOWN     0x00000022
 #define IOCTL_UNKNOWN_BASE      FILE_DEVICE_UNKNOWN
@@ -20,7 +22,7 @@
 #define IOCTL_GET_DLLS          CTL_CODE(IOCTL_UNKNOWN_BASE, 0x0806, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 #define IOCTL_GET_KINLINEHOOK   CTL_CODE(IOCTL_UNKNOWN_BASE, 0x0807, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 #define IOCTL_NT_API_INFO       CTL_CODE(IOCTL_UNKNOWN_BASE, 0x0808, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
-
+#define IOCTL_FIX_ISSUES        CTL_CODE(IOCTL_UNKNOWN_BASE, 0x0809, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
 // ARKitDrv related defines
 #define ARKITLIB_DRIVER_FILENAME           "ARKitDrv.sys"
@@ -81,5 +83,18 @@ typedef struct _ARKNTAPI {
     DWORD dwNtOpenThread;
     DWORD dwNtTerminateThread;
 } ARKNTAPI, *PARKNTAPI;
+
+typedef enum _eArkFixIssueType {
+    eArkNone = 0,
+    eArkKillProcess,
+    eArkDisableDriver,
+    eArkFixSsdtHook,
+    eArkFixInlineHook
+} eArkFixIssueType;
+
+typedef struct _ARKFIX {
+    eArkFixIssueType eType;
+    BYTE fixData[ARKITLIB_STR_LEN];
+} ARKFIX, *PARKFIX;
 
 #endif // __ARKITLIBDRVCMN_H__

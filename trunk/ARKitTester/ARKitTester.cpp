@@ -78,6 +78,21 @@ int main()
             printf( "\n%d] %s - %s - 0x%x", i, itHooks->funcName, itHooks->driverName, itHooks->jumpToAddr );
         }
     }
+
+    // Kill a process
+    {
+        DWORD dwPid = 0;
+        printf( "\n\n\nEnter pid to kill: " );
+        scanf( "%d", &dwPid );
+        if( obj.killProcess( dwPid ) )
+        {
+            printf( "\nProcess killed successfully!\n" );
+        }
+        else
+        {
+            printf( "\nFailed to kill process\n" );
+        }
+    }
     
     return 0;
 }

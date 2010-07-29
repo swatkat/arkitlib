@@ -19,6 +19,8 @@ UINT ScanAndGetProcessCount();
 VOID ScanAndGetProcessCountThread( PVOID pThrParam );
 NTSTATUS GetProcByPidScan();
 NTSTATUS GetProcByTidScan();
+BOOLEAN KillProcess( DWORD dwPid );
+VOID KillProcessThread( PVOID pThrParam );
 
 // DLL routines
 UINT ScanAndGetDllCount( DWORD dwPid );
