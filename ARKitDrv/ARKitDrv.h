@@ -17,6 +17,7 @@
 // Process routines
 UINT ScanAndGetProcessCount();
 VOID ScanAndGetProcessCountThread( PVOID pThrParam );
+NTSTATUS GetProcByHandleTableScan();
 NTSTATUS GetProcByPidScan();
 NTSTATUS GetProcByTidScan();
 BOOLEAN KillProcess( DWORD dwPid );
