@@ -64,6 +64,9 @@ VOID ScanAndGetProcessCountThread( PVOID pThrParam )
             {
                 if( eOS_ERR != g_globalData.eOSVer )
                 {
+                    // Scan handle table for processes
+                    GetProcByHandleTableScan();
+
                     // Scan by process id brute force
                     GetProcByPidScan();
 
@@ -81,6 +84,121 @@ VOID ScanAndGetProcessCountThread( PVOID pThrParam )
         DbgPrint( "Exception caught in ScanAndGetProcessCountThread()" );
     }
     PsTerminateSystemThread( STATUS_SUCCESS );
+}
+
+/*++
+* @method: GetProcByHandleTableScan
+*
+* @description: Finds running processes by scanning handle table
+*
+* @input: None
+*
+* @output: NTSTATUS
+*
+*--*/
+NTSTATUS GetProcByHandleTableScan()
+{
+    NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+    __try
+    {
+        DWORD dwLen = 32000;
+        DWORD dwRetLen = 0;
+        char* pszBuffer = NULL;
+
+        while( 1 )
+        {
+            // Allocate memory to hold handle info. Start with 32KB.
+            pszBuffer = ExAllocatePoolWithTag( NonPagedPool, dwLen, ARKITLISTTAG );
+            if( MmIsAddressValid( pszBuffer ) )
+            {
+                // Get all open handles
+                RtlZeroMemory( pszBuffer, dwLen );
+                retVal = NtQuerySystemInformation( SystemHandleInformation, pszBuffer, dwLen, &dwRetLen );
+                if( STATUS_INFO_LENGTH_MISMATCH == retVal )
+                {
+                    // If buffer is less than expected, then retry with larger size
+                    ExFreePool( pszBuffer );
+                    dwLen = dwLen + (dwLen/2);
+                    pszBuffer = NULL;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+#ifdef ARKITDRV_DEBUG_PRINT
+                DbgPrint( "GetProcByHandleTableScan: Memory allocation failed" );
+#endif // ARKITDRV_DEBUG_PRINT
+
+                pszBuffer = NULL;
+                retVal = STATUS_UNSUCCESSFUL;
+                break;
+            }
+        }
+
+        if( STATUS_SUCCESS == retVal )
+        {
+            ULONG ulIndex = 0;
+            DWORD dwPrevPid = 0;
+            PEPROCESS pEproc = NULL;
+            PROCLISTENTRY procEntry;
+            PSYSTEM_HANDLE_INFORMATION pHandleInfo = (PSYSTEM_HANDLE_INFORMATION)pszBuffer;
+
+            // Loop through the handle table info array
+            for( ulIndex = 0; ulIndex < pHandleInfo->NumberOfHandles; ulIndex++ )
+            {
+                // Get EPROCESS pointer for this PID
+                pEproc = NULL;
+                retVal = PsLookupProcessByProcessId( (HANDLE)(pHandleInfo->Handles[ulIndex].UniqueProcessId), &pEproc );
+                if( STATUS_SUCCESS == retVal )
+                {
+                    // Check if process is alive
+                    if( IsProcessAlive( pEproc ) )
+                    {
+                        // Filter out multiple handles for same PID
+                        if( dwPrevPid != pHandleInfo->Handles[ulIndex].UniqueProcessId )
+                        {
+                            // Add the process info to our list
+                            dwPrevPid = pHandleInfo->Handles[ulIndex].UniqueProcessId;
+                            RtlZeroMemory( &procEntry, sizeof( PROCLISTENTRY ) );
+                            procEntry.dwPID = dwPrevPid;
+                            GetProcessPathName( pEproc, procEntry.szProcName, ARKITLIB_STR_LEN );
+                            retVal = AddListEntry( eProcList, &procEntry, TRUE );
+                        }
+                    }
+                    // Dereference EPROCESS pointer
+                    ObDereferenceObject( pEproc );
+                }
+                else
+                {
+//#ifdef ARKITDRV_DEBUG_PRINT
+            DbgPrint( "GetProcByHandleTableScan: PsLookupProcessByProcessId failed: 0x%x, pid: %ld", retVal,
+                       pHandleInfo->Handles[ulIndex].UniqueProcessId );
+//#endif // ARKITDRV_DEBUG_PRINT
+                }
+            }
+        }
+        else
+        {
+#ifdef ARKITDRV_DEBUG_PRINT
+            DbgPrint( "GetProcByHandleTableScan: NtQuerySystemInformation failed: 0x%x", retVal );
+#endif // ARKITDRV_DEBUG_PRINT
+        }
+
+        // Free buffer
+        if( MmIsAddressValid( pszBuffer ) )
+        {
+            ExFreePool( pszBuffer );
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = STATUS_UNSUCCESSFUL;
+        DbgPrint( "Exception caught in GetProcByHandleTableScan()" );
+    }
+    return retVal;
 }
 
 /*++
@@ -321,6 +439,7 @@ VOID ScanAndGetDllCountThread( PVOID pThrParam )
                     ExFreePool( pKapcState );
                     pKapcState = NULL;
                 }
+                // Dereference EPROCESS pointer
                 ObDereferenceObject( pEproc );
             }
 

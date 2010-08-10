@@ -134,6 +134,35 @@ typedef struct _PEB {
     ULONG SessionId;
 } PEB, *PPEB;
 
+#define SystemHandleInformation         16
+
+typedef struct _SYSTEM_HANDLE_TABLE_ENTRY_INFO
+{
+    USHORT UniqueProcessId;
+    USHORT CreatorBackTraceIndex;
+    UCHAR ObjectTypeIndex;
+    UCHAR HandleAttributes;
+    USHORT HandleValue;
+    PVOID Object;
+    ULONG GrantedAccess;
+} SYSTEM_HANDLE_TABLE_ENTRY_INFO, *PSYSTEM_HANDLE_TABLE_ENTRY_INFO;
+
+typedef struct _SYSTEM_HANDLE_INFORMATION
+{
+    ULONG NumberOfHandles;
+    SYSTEM_HANDLE_TABLE_ENTRY_INFO Handles[1];
+} SYSTEM_HANDLE_INFORMATION, *PSYSTEM_HANDLE_INFORMATION;
+
+typedef enum _OBJECT_INFORMATION_CLASS {
+    ObjectBasicInformation = 0,
+    ObjectTypeInformation = 2
+} OBJECT_INFORMATION_CLASS;
+
+typedef struct _PUBLIC_OBJECT_TYPE_INFORMATION {
+    UNICODE_STRING TypeName;
+    ULONG Reserved[22];
+} PUBLIC_OBJECT_TYPE_INFORMATION, *PPUBLIC_OBJECT_TYPE_INFORMATION;
+
 // NT function forward declarations
 NTSYSAPI
 NTSTATUS
@@ -262,5 +291,53 @@ typedef NTSTATUS (NTAPI *PNTOPENTHREAD)( OUT PHANDLE ThreadHandle,
 typedef NTSTATUS (NTAPI *PNTTERMINATETHREAD)( IN HANDLE ThreadHandle,
                                               IN NTSTATUS ExitStatus
                                               );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+NtQuerySystemInformation( IN UINT SystemInformationClass, // SYSTEM_INFORMATION_CLASS
+                          IN OUT PVOID SystemInformation,
+                          IN ULONG SystemInformationLength,
+                          OUT PULONG ReturnLength
+                         );
+typedef NTSTATUS (NTAPI *PNTQUERYSYSTEMINFORMATION)( IN UINT SystemInformationClass, // SYSTEM_INFORMATION_CLASS
+                                                     IN OUT PVOID SystemInformation,
+                                                     IN ULONG SystemInformationLength,
+                                                     OUT PULONG ReturnLength
+                                                    );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+NtQueryObject( IN HANDLE Handle,
+               IN OBJECT_INFORMATION_CLASS ObjectInformationClass,
+               IN OUT PVOID ObjectInformation,
+               IN ULONG ObjectInformationLength,
+               IN OUT PULONG ReturnLength
+              );
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwQueryObject( IN HANDLE Handle,
+               IN OBJECT_INFORMATION_CLASS ObjectInformationClass,
+               IN OUT PVOID ObjectInformation,
+               IN ULONG ObjectInformationLength,
+               IN OUT PULONG ReturnLength
+              );
+typedef NTSTATUS (NTAPI *PNTQUERYOBJECT)( IN HANDLE Handle,
+                                          IN OBJECT_INFORMATION_CLASS ObjectInformationClass,
+                                          IN OUT PVOID ObjectInformation,
+                                          IN ULONG ObjectInformationLength,
+                                          IN OUT PULONG ReturnLength
+                                         );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ObQueryNameString( IN PVOID Object,
+                   IN OUT POBJECT_NAME_INFORMATION ObjectNameInfo,
+                   IN ULONG Length,
+                   OUT PULONG ReturnLength
+                  );
 
 #endif // __MY_NTDEFINES_H__
