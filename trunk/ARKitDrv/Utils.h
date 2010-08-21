@@ -59,6 +59,8 @@ typedef struct _OS_SPEC_DATA
     DWORD dwCmNodeNameLenOffset;
     DWORD dwCmKcbLastWriteTime;
     DWORD dwModEntryOffset;
+    DWORD dwVadRootOffset;
+    DWORD dwPebOffset;
 } OS_SPEC_DATA, *POS_SPEC_DATA;
 
 // Utility routines
