@@ -6,13 +6,12 @@ int main()
 
     // Get process list
     {
-        int i = 0;
         std::list<ARKPROCESS> procList;
         obj.getProcessList( procList );
 
         printf( "\n\nGot %d processes", procList.size() );
         std::list<ARKPROCESS>::iterator itProc = procList.begin();
-        for( ; itProc != procList.end(); itProc++ )
+        for( int i = 0; itProc != procList.end(); itProc++ )
         {
             ++i;
             printf( "\n%d] %s - %d", i, itProc->procName, itProc->procId );
@@ -21,13 +20,12 @@ int main()
 
     // Get driver list
     {
-        int i = 0;
         std::list<ARKDRIVER> driverList;
         obj.getDriverList( driverList );
 
         printf( "\n\nGot %d drivers", driverList.size() );
         std::list<ARKDRIVER>::iterator itDrv = driverList.begin();
-        for( ; itDrv != driverList.end(); itDrv++ )
+        for( int i = 0; itDrv != driverList.end(); itDrv++ )
         {
             ++i;
             printf( "\n%d] %s - 0x%x", i, itDrv->driverName, itDrv->baseAddr );
@@ -36,13 +34,12 @@ int main()
 
     // Get SSDT hooks list
     {
-        int i = 0;
         std::list<ARKSSDTHOOK> ssdtHookList;
         obj.getSSDTHooksList( ssdtHookList );
 
         printf( "\n\nGot %d SSDT hooks", ssdtHookList.size() );
         std::list<ARKSSDTHOOK>::iterator itSsdtHook = ssdtHookList.begin();
-        for( ; itSsdtHook != ssdtHookList.end(); itSsdtHook++ )
+        for( int i = 0; itSsdtHook != ssdtHookList.end(); itSsdtHook++ )
         {
             ++i;
             printf( "\n%d] %s - %s - 0x%x", i, itSsdtHook->driverName, itSsdtHook->ssdtFuncName, itSsdtHook->hookAddr );
@@ -51,13 +48,15 @@ int main()
 
     // Get DLLs loaded in current process
     {
-        int i = 0;
+        DWORD dwPid = 0;
         std::list<ARKDLL> dllList;
-        obj.getDllList( ::GetCurrentProcessId(), dllList );
+        printf( "\n\n\nEnter pid to get DLLs: " );
+        scanf( "%d", &dwPid );
+        obj.getDllList( dwPid, dllList );
 
         printf( "\n\nGot %d DLLs", dllList.size() );
         std::list<ARKDLL>::iterator itDlls = dllList.begin();
-        for( ; itDlls != dllList.end(); itDlls++ )
+        for( int i = 0; itDlls != dllList.end(); itDlls++ )
         {
             ++i;
             printf( "\n%d] %s - 0x%x", i, itDlls->dllName, itDlls->baseAddr );
@@ -66,13 +65,12 @@ int main()
 
     // Get kernel inline hooks
     {
-        int i = 0;
         std::list<ARKINLINEHOOK> inlineHookList;
         obj.getKernelInlineHooks( inlineHookList );
 
         printf( "\n\nGot %d inline hooks", inlineHookList.size() );
         std::list<ARKINLINEHOOK>::iterator itHooks = inlineHookList.begin();
-        for( ; itHooks != inlineHookList.end(); itHooks++ )
+        for( int i = 0; itHooks != inlineHookList.end(); itHooks++ )
         {
             ++i;
             printf( "\n%d] %s - %s - 0x%x", i, itHooks->funcName, itHooks->driverName, itHooks->jumpToAddr );
