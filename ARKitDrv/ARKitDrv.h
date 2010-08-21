@@ -26,6 +26,10 @@ VOID KillProcessThread( PVOID pThrParam );
 // DLL routines
 UINT ScanAndGetDllCount( DWORD dwPid );
 VOID ScanAndGetDllCountThread( PVOID pThrParam );
+NTSTATUS GetDllByPeb( DWORD dwPid );
+NTSTATUS GetDllByVadTree( DWORD dwPid );
+VOID TraverseVadTreeInOrderWin2KXP( PMMVAD pVadNode );
+VOID TraverseVadTreeInOrderWin2K3Vista( PMMADDRESS_NODE pVadNode );
 
 // Driver routines
 UINT ScanAndGetDriverCount();

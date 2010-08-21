@@ -163,6 +163,101 @@ typedef struct _PUBLIC_OBJECT_TYPE_INFORMATION {
     ULONG Reserved[22];
 } PUBLIC_OBJECT_TYPE_INFORMATION, *PPUBLIC_OBJECT_TYPE_INFORMATION;
 
+typedef struct _CONTROL_AREA
+{
+    struct _SEGMENT* Segment;
+    LIST_ENTRY DereferenceList;
+    UINT32 NumberOfSectionReferences;
+    UINT32 NumberOfPfnReferences;
+    UINT32 NumberOfMappedViews;
+    UINT16 NumberOfSubsections;
+    UINT16 FlushInProgressCount;
+    UINT32 NumberOfUserReferences;
+    UINT32 u;
+    PFILE_OBJECT FilePointer;
+    struct _EVENT_COUNTER* WaitingForDeletion;
+    UINT16 ModifiedWriteCount;
+    UINT16 NumberOfSystemCacheViews;
+} CONTROL_AREA, *PCONTROL_AREA;
+
+typedef struct _MMVAD
+{
+    UINT32 StartingVpn;
+    UINT32 EndingVpn;
+    struct _MMVAD* Parent;
+    struct _MMVAD* LeftChild;
+    struct _MMVAD* RightChild;
+    ULONG32 u;
+    PCONTROL_AREA ControlArea;
+    struct _MMPTE* FirstPrototypePte;
+    struct _MMPTE* LastContiguousPte;
+    ULONG32 u2;
+} MMVAD, *PMMVAD;
+
+typedef struct _EX_FAST_REF
+{
+    union
+    {
+        PVOID Object;
+        ULONG RefCnt: 3;
+        ULONG Value;
+    };
+} EX_FAST_REF, *PEX_FAST_REF;
+
+typedef struct _CONTROL_AREA_VISTA
+{
+    struct _SEGMENT* Segment;
+    LIST_ENTRY DereferenceList;
+    UINT32 NumberOfSectionReferences;
+    UINT32 NumberOfPfnReferences;
+    UINT32 NumberOfMappedViews;
+    UINT32 NumberOfUserReferences;
+    UINT32 u;
+    UINT32 u1;
+    EX_FAST_REF FilePointer;
+    UINT16 ControlAreaLock;
+    UINT32 StartingFrame;
+    PVOID /*PMI_SECTION_CREATION_EVENT*/ WaitingForDeletion;
+    BYTE u2[12];
+    INT64 LockedPages;
+} CONTROL_AREA_VISTA, *PCONTROL_AREA_VISTA;
+
+typedef struct _CONTROL_AREA_2K3 {
+    struct _SEGMENT* Segment;
+    LIST_ENTRY DereferenceList;
+    UINT32 NumberOfSectionReferences;
+    UINT32 NumberOfPfnReferences;
+    UINT32 NumberOfMappedViews;
+    UINT32 NumberOfSystemCacheViews;
+    UINT32 NumberOfUserReferences;
+    UINT32 u;
+    PFILE_OBJECT FilePointer;
+    struct _EVENT_COUNTER* WaitingForDeletion;
+    UINT16 ModifiedWriteCount;
+    UINT16 FlushInProgressCount;
+    UINT16 WritableUserReferences;
+    UINT32 QuadwordPad;
+} CONTROL_AREA_2K3, *PCONTROL_AREA_2K3;
+
+typedef struct _MMADDRESS_NODE
+{
+    ULONG u1;
+    struct _MMADDRESS_NODE* LeftChild;
+    struct _MMADDRESS_NODE* RightChild;
+    ULONG StartingVpn;
+    ULONG EndingVpn;
+} MMADDRESS_NODE, *PMMADDRESS_NODE;
+
+typedef struct _MM_AVL_TABLE
+{
+    MMADDRESS_NODE BalancedRoot;
+    ULONG DepthOfTree: 5;
+    ULONG Unused: 3;
+    ULONG NumberGenericTableElements: 24;
+    PVOID NodeHint;
+    PVOID NodeFreeHint;
+} MM_AVL_TABLE, *PMM_AVL_TABLE;
+
 // NT function forward declarations
 NTSYSAPI
 NTSTATUS

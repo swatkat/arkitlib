@@ -153,6 +153,8 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwCmNodeNameLenOffset = 0x048;
                     g_globalData.dwCmKcbLastWriteTime = 0; // Not present!!?
                     g_globalData.dwModEntryOffset = 0x14;
+                    g_globalData.dwVadRootOffset = 0x194;
+                    g_globalData.dwPebOffset = 0x7ffdf000;
                     ((PTHRPARAMS)pThrParam)->bResult = TRUE;
                 }
                 break;
@@ -176,6 +178,8 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwCmNodeNameLenOffset = 0x048;
                     g_globalData.dwCmKcbLastWriteTime = 0x038;
                     g_globalData.dwModEntryOffset = 0;
+                    g_globalData.dwVadRootOffset = 0x11c;
+                    g_globalData.dwPebOffset = 0x7ffdf000;
                     ((PTHRPARAMS)pThrParam)->bResult = TRUE;
                 }
                 break;
@@ -204,6 +208,8 @@ VOID InitGlobalsThread( PVOID pThrParam )
                             g_globalData.dwCmNodeNameLenOffset = 0x048; // in _CM_KEY_NODE
                             g_globalData.dwCmKcbLastWriteTime = 0x050; // in _CM_KEY_CONTROL_BLOCK
                             g_globalData.dwModEntryOffset = 0;
+                            g_globalData.dwVadRootOffset = 0x250;
+                            g_globalData.dwPebOffset = 0x7ffdf000;
                         }
                         break;
 
@@ -227,6 +233,8 @@ VOID InitGlobalsThread( PVOID pThrParam )
                             g_globalData.dwCmNodeNameLenOffset = 0x048; // Offset not checked in SP0.
                             g_globalData.dwCmKcbLastWriteTime = 0x050; // Offset not checked in SP0.
                             g_globalData.dwModEntryOffset = 0;
+                            g_globalData.dwVadRootOffset = 0x250; // Check?
+                            g_globalData.dwPebOffset = 0x7ffdf000;
                         }
                         break;
                     }
@@ -253,6 +261,8 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwCmNodeNameLenOffset = 0x048;
                     g_globalData.dwCmKcbLastWriteTime = 0x050;
                     g_globalData.dwModEntryOffset = 0;
+                    g_globalData.dwVadRootOffset = 0x250;
+                    g_globalData.dwPebOffset = 0x7ffdf000;
                     ((PTHRPARAMS)pThrParam)->bResult = TRUE;
                 }
                 break;
@@ -276,6 +286,8 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwCmNodeNameLenOffset = 0x048;
                     g_globalData.dwCmKcbLastWriteTime = 0x050;
                     g_globalData.dwModEntryOffset = 0;
+                    g_globalData.dwVadRootOffset = 0x238;
+                    g_globalData.dwPebOffset = 0x7ffdf000;
                     ((PTHRPARAMS)pThrParam)->bResult = TRUE;
                 }
                 break;
@@ -750,31 +762,40 @@ BOOLEAN IsDrvNameKernelW( wchar_t* pwszDrvName )
 *--*/
 PDWORD GetPsLoadedModuleList()
 {
-    PDWORD pdwAddress = NULL;
+    PDWORD pPsLoadedModuleList = NULL;
     __try
     {
         if( MmIsAddressValid( g_pMyDriverObj ) )
         {
             // DriverSection is the entry in PsLoadedModuleList
-            pdwAddress = (PDWORD)(g_pMyDriverObj->DriverSection);
+            pPsLoadedModuleList = (PDWORD)(g_pMyDriverObj->DriverSection);
         }
         else
         {
             // If our driver object is invalid, then get it from KdVersionBlock
+            PDWORD pKdVersionBlock = NULL;
+            KeSetSystemAffinityThread( 1 );
             __asm
             {
-                mov eax, fs:[0x34];     // Get address of KdVersionBlock
-                mov eax, [eax+0x18];    // Get address of PsLoadedModuleList
-                mov pdwAddress, eax;
+                mov eax, fs:[0x1c]; // SelfPCR
+                mov eax, fs:[0x34]; // Get address of KdVersionBlock
+                mov pKdVersionBlock, eax;
+                mov eax, [ eax + 0x18 ]; // Get address of PsLoadedModuleList
+                mov pPsLoadedModuleList, eax;
             }
+            KeRevertToUserAffinityThread();
+
+#ifdef ARKITDRV_DEBUG_PRINT
+            DbgPrint( "GetPsLoadedModuleList: KdVersionBlock 0x%x, PsLoadedModuleList 0x%x", pKdVersionBlock, pPsLoadedModuleList );
+#endif // ARKITDRV_DEBUG_PRINT
         }
     }
     __except( EXCEPTION_EXECUTE_HANDLER )
     {
-        pdwAddress = NULL;
+        pPsLoadedModuleList = NULL;
         DbgPrint( "Exception caught in GetPsLoadedModuleList()" );
     }
-    return pdwAddress;
+    return pPsLoadedModuleList;
 }
 
 /*++

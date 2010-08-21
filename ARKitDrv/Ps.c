@@ -173,10 +173,10 @@ NTSTATUS GetProcByHandleTableScan()
                 }
                 else
                 {
-//#ifdef ARKITDRV_DEBUG_PRINT
+#ifdef ARKITDRV_DEBUG_PRINT
             DbgPrint( "GetProcByHandleTableScan: PsLookupProcessByProcessId failed: 0x%x, pid: %ld", retVal,
                        pHandleInfo->Handles[ulIndex].UniqueProcessId );
-//#endif // ARKITDRV_DEBUG_PRINT
+#endif // ARKITDRV_DEBUG_PRINT
                 }
             }
         }
@@ -374,74 +374,13 @@ VOID ScanAndGetDllCountThread( PVOID pThrParam )
     {
         if( MmIsAddressValid( pThrParam ) && ( STATUS_SUCCESS == InitList( eDllList ) ) )
         {
-            PEPROCESS pEproc = NULL;
             DWORD dwPid = *(PDWORD)((PTHRPARAMS)pThrParam)->pParam;
 
-            // Get the EPROCESS pointer for this process
-            NTSTATUS retVal = PsLookupProcessByProcessId( (HANDLE)dwPid, &pEproc );
-            if( ( STATUS_SUCCESS == retVal ) && MmIsAddressValid( pEproc ) )
-            {
-                PKAPC_STATE pKapcState = ExAllocatePoolWithTag( NonPagedPool, sizeof( KAPC_STATE ), ARKITLISTTAG );
-                if( MmIsAddressValid( pKapcState ) )
-                {
-                    PPEB pPeb = NULL;
-                    PLIST_ENTRY pDllListHead = NULL;
-                    UNICODE_STRING usMethodName;
-                    PSGETPROCESSPB pPsGetProcessPeb = NULL;
+            // Get DLLs by traversing PEB list
+            GetDllByPeb( dwPid );
 
-                    // Attach to process's stack
-                    KeStackAttachProcess( pEproc, pKapcState );
-
-                    // Get the address of PsGetProcessPeb
-                    RtlInitUnicodeString( &usMethodName, L"PsGetProcessPeb" );
-                    pPsGetProcessPeb = (PSGETPROCESSPB)MmGetSystemRoutineAddress( &usMethodName );
-
-                    // Get pointer to PEB of this process
-                    pPeb = MmIsAddressValid( pPsGetProcessPeb ) ? pPsGetProcessPeb( pEproc ) : (PPEB)( (PBYTE)pPeb + 0x7ffdf000 );
-                    if( MmIsAddressValid( pPeb ) )
-                    {
-                        // Get DLL list entry head
-                        pDllListHead = &((PPEB_LDR_DATA)(pPeb->Ldr))->InMemoryOrderModuleList;
-                    }
-
-                    if( MmIsAddressValid( pDllListHead ) )
-                    {
-                        PLIST_ENTRY pDllListEntry = NULL;
-                        PLDR_DATA_TABLE_ENTRY pDll = NULL;
-                        DLLLISTENTRY dllEntry = {0};
-                        ANSI_STRING ansiDllName;
-
-                        // Walk thorugh DLL list
-                        pDllListEntry = pDllListHead->Flink;
-                        while( MmIsAddressValid( pDllListEntry ) && ( pDllListEntry != pDllListHead ) )
-                        {
-                            // Get each DLL list entry
-                            pDll = (PLDR_DATA_TABLE_ENTRY)CONTAINING_RECORD( pDllListEntry, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks );
-                            if( MmIsAddressValid( pDll ) )
-                            {
-                                // Copy driver info to list entry
-                                RtlZeroMemory( &dllEntry, sizeof( DLLLISTENTRY ) );
-                                dllEntry.dwBase = (DWORD)pDll->DllBase;
-                                RtlUnicodeStringToAnsiString( &ansiDllName, &( pDll->FullDllName ), 1 );
-                                RtlStringCchCopyA( dllEntry.szDllName, ARKITLIB_STR_LEN, ansiDllName.Buffer );
-                                RtlFreeAnsiString( &ansiDllName );
-
-                                // Add it to our list
-                                AddListEntry( eDllList, &dllEntry, TRUE );
-                            }
-                            pDllListEntry = pDllListEntry->Flink;
-                        }
-                    }
-
-                    // Detach from process's stack
-                    KeUnstackDetachProcess( pKapcState );
-
-                    ExFreePool( pKapcState );
-                    pKapcState = NULL;
-                }
-                // Dereference EPROCESS pointer
-                ObDereferenceObject( pEproc );
-            }
+            // Get DLLs by traversing VAD tree
+            GetDllByVadTree( dwPid );
 
             // Set the result to true if we found some DLLs
             ((PTHRPARAMS)pThrParam)->bResult = !IsMyListEmpty( eDllList );
@@ -452,6 +391,264 @@ VOID ScanAndGetDllCountThread( PVOID pThrParam )
         DbgPrint( "Exception caught in ScanAndGetDllCountThread()" );
     }
     PsTerminateSystemThread( STATUS_SUCCESS );
+}
+
+/*++
+* @method: GetDllByVadTree
+*
+* @description: Gets all loaded DLLs (executable images) by traversing EPROCESS VAD tree
+*
+* @input: DWORD dwPid
+*
+* @output: NTSTATUS
+*
+*--*/
+NTSTATUS GetDllByVadTree( DWORD dwPid )
+{
+    NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+    __try
+    {
+        PEPROCESS pEproc = NULL;
+
+        // Get EPROCESS pointer by PID
+        retVal = PsLookupProcessByProcessId( (HANDLE)dwPid, &pEproc );
+        if( STATUS_SUCCESS == retVal )
+        {
+            if( IsProcessAlive( pEproc ) )
+            {
+                if( MmIsAddressValid( (PBYTE)pEproc + g_globalData.dwVadRootOffset ) )
+                {
+                    PMMVAD pVadRoot = NULL;
+                    PMMADDRESS_NODE pMmAddrNode = NULL;
+                    switch( g_globalData.eOSVer )
+                    {
+                    case eOS_WIN_2K:
+                    case eOS_WIN_XP:
+                        {
+                            pVadRoot = (PMMVAD)*(PULONG)( (PBYTE)pEproc + g_globalData.dwVadRootOffset );
+                            TraverseVadTreeInOrderWin2KXP( pVadRoot );
+                        }
+                        break;
+
+                    case eOS_WIN_2K3:
+                    case eOS_WIN_2K3R2:
+                    case eOS_WIN_VISTA:
+                        {
+                            pMmAddrNode = (PMMADDRESS_NODE)( (PBYTE)pEproc + g_globalData.dwVadRootOffset );
+                            TraverseVadTreeInOrderWin2K3Vista( pMmAddrNode );
+                        }
+                        break;
+                    }
+                }
+            }
+            ObDereferenceObject( pEproc );
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = STATUS_UNSUCCESSFUL;
+        DbgPrint( "Exception caught in GetDllByVadTree()" );
+    }
+    return retVal;
+}
+
+/*++
+* @method: TraverseVadTreeInOrderWin2K3Vista
+*
+* @description: Traverses VAD tree in order. Win2K3/Vista specific.
+*
+* @input: PMMADDRESS_NODE pVadNode
+*
+* @output: None
+*
+*--*/
+VOID TraverseVadTreeInOrderWin2K3Vista( PMMADDRESS_NODE pVadNode )
+{
+    __try
+    {
+        if( MmIsAddressValid( pVadNode ) )
+        {
+            // Traverse left child
+            TraverseVadTreeInOrderWin2K3Vista( pVadNode->LeftChild );
+
+            {
+                PMMVAD pMmVad = (PMMVAD)pVadNode;
+                if( MmIsAddressValid( pMmVad->ControlArea ) && MmIsAddressValid( pMmVad->ControlArea->FilePointer ) )
+                {
+                    ULONG StartingVpn = 0;
+                    ULONG EndingVpn = 0;
+                    DLLLISTENTRY dllEntry = {0};
+
+                    // Get base and end addresses
+                    StartingVpn = pVadNode->StartingVpn << 12;
+                    EndingVpn = ( ( pVadNode->EndingVpn + 1 ) << 12 ) - 1;
+
+                    // Copy DLL info to list entry
+                    RtlZeroMemory( &dllEntry, sizeof( DLLLISTENTRY ) );
+                    dllEntry.dwBase = StartingVpn;
+                    RtlStringCchPrintfA( dllEntry.szDllName, ARKITLIB_STR_LEN, "%S", pMmVad->ControlArea->FilePointer->FileName.Buffer );
+
+                    // Add the DLL to our list
+                    AddListEntry( eDllList, &dllEntry, TRUE );
+
+#ifdef ARKITDRV_DEBUG_PRINT
+                    DbgPrint( "TraverseVadTreeInOrderWin2K3Vista: Name: %S, Length: %d, StartingVpn: 0x%x, EndingVpn: 0x%x",
+                              pMmVad->ControlArea->FilePointer->FileName.Buffer,
+                              pMmVad->ControlArea->FilePointer->FileName.Length, StartingVpn, EndingVpn );
+#endif // ARKITDRV_DEBUG_PRINT
+                }
+            }
+
+            // Traverse right child
+            TraverseVadTreeInOrderWin2K3Vista( pVadNode->RightChild );
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        DbgPrint( "Exception caught in TraverseVadTreeInOrderWin2K3Vista()" );
+    }
+}
+
+/*++
+* @method: TraverseVadTreeInOrderWin2KXP
+*
+* @description: Traverses VAD tree in order. Win2K/XP specific.
+*
+* @input: PMMVAD pVadNode
+*
+* @output: None
+*
+*--*/
+VOID TraverseVadTreeInOrderWin2KXP( PMMVAD pVadNode )
+{
+    __try
+    {
+        if( MmIsAddressValid( pVadNode ) )
+        {
+            // Traverse left child
+            TraverseVadTreeInOrderWin2KXP( pVadNode->LeftChild );
+            
+            // Get filename from file object
+            if( MmIsAddressValid( pVadNode->ControlArea ) && MmIsAddressValid( pVadNode->ControlArea->FilePointer ) )
+            {
+                ULONG StartingVpn = 0;
+                ULONG EndingVpn = 0;
+                DLLLISTENTRY dllEntry = {0};
+
+                // Get base and end addresses
+                StartingVpn = pVadNode->StartingVpn << 12;
+                EndingVpn = ( ( pVadNode->EndingVpn + 1 ) << 12 ) - 1;
+
+                // Copy DLL info to list entry
+                RtlZeroMemory( &dllEntry, sizeof( DLLLISTENTRY ) );
+                dllEntry.dwBase = StartingVpn;
+                RtlStringCchPrintfA( dllEntry.szDllName, ARKITLIB_STR_LEN, "%S", pVadNode->ControlArea->FilePointer->FileName.Buffer );
+
+                // Add the DLL to our list
+                AddListEntry( eDllList, &dllEntry, TRUE );
+
+#ifdef ARKITDRV_DEBUG_PRINT
+                DbgPrint( "TraverseVadTreeInOrderWin2KXP: Name: %S, Length: %d, StartingVpn: 0x%x, EndingVpn: 0x%x",
+                          pVadNode->ControlArea->FilePointer->FileName.Buffer,
+                          pVadNode->ControlArea->FilePointer->FileName.Length, StartingVpn, EndingVpn );
+#endif // ARKITDRV_DEBUG_PRINT
+            }
+            
+            // Traverse right child
+            TraverseVadTreeInOrderWin2KXP( pVadNode->RightChild );
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        DbgPrint( "Exception caught in TraverseVadTreeInOrderWin2KXP()" );
+    }
+}
+
+/*++
+* @method: GetDllByPeb
+*
+* @description: Gets all loaded DLLs by traversing InMemoryOrderModuleList in PEB
+*
+* @input: DWORD dwPid
+*
+* @output: NTSTATUS
+*
+*--*/
+NTSTATUS GetDllByPeb( DWORD dwPid )
+{
+    NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+    __try
+    {
+        // Get the EPROCESS pointer for this process
+        PEPROCESS pEproc = NULL;
+        NTSTATUS retVal = PsLookupProcessByProcessId( (HANDLE)dwPid, &pEproc );
+        if( ( STATUS_SUCCESS == retVal ) && MmIsAddressValid( pEproc ) )
+        {
+            PKAPC_STATE pKapcState = ExAllocatePoolWithTag( NonPagedPool, sizeof( KAPC_STATE ), ARKITLISTTAG );
+            if( MmIsAddressValid( pKapcState ) )
+            {
+                PPEB pPeb = NULL;
+                PLIST_ENTRY pDllListHead = NULL;
+                UNICODE_STRING usMethodName;
+                PSGETPROCESSPB pPsGetProcessPeb = NULL;
+
+                // Get the address of PsGetProcessPeb
+                RtlInitUnicodeString( &usMethodName, L"PsGetProcessPeb" );
+                pPsGetProcessPeb = (PSGETPROCESSPB)MmGetSystemRoutineAddress( &usMethodName );
+
+                // Get pointer to PEB of this process
+                pPeb = MmIsAddressValid( pPsGetProcessPeb ) ? pPsGetProcessPeb( pEproc ) : (PPEB)( (PBYTE)pPeb + g_globalData.dwPebOffset );
+
+                // Attach to process's stack
+                KeStackAttachProcess( pEproc, pKapcState );
+
+                if( MmIsAddressValid( pPeb ) )
+                {
+                    // Get DLL list entry head
+                    pDllListHead = &((PPEB_LDR_DATA)(pPeb->Ldr))->InMemoryOrderModuleList;
+                }
+                if( MmIsAddressValid( pDllListHead ) )
+                {
+                    PLIST_ENTRY pDllListEntry = NULL;
+                    PLDR_DATA_TABLE_ENTRY pDll = NULL;
+                    DLLLISTENTRY dllEntry = {0};
+                    
+                    // Walk thorugh DLL list
+                    pDllListEntry = pDllListHead->Flink;
+                    while( MmIsAddressValid( pDllListEntry ) && ( pDllListEntry != pDllListHead ) )
+                    {
+                        // Get each DLL list entry
+                        pDll = (PLDR_DATA_TABLE_ENTRY)CONTAINING_RECORD( pDllListEntry, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks );
+                        if( MmIsAddressValid( pDll ) )
+                        {
+                            // Copy DLL info to list entry
+                            RtlZeroMemory( &dllEntry, sizeof( DLLLISTENTRY ) );
+                            dllEntry.dwBase = (DWORD)pDll->DllBase;
+                            RtlStringCchPrintfA( dllEntry.szDllName, ARKITLIB_STR_LEN, "%S", pDll->FullDllName.Buffer );
+
+                            // Add it to our list
+                            AddListEntry( eDllList, &dllEntry, TRUE );
+                        }
+                        pDllListEntry = pDllListEntry->Flink;
+                    }
+                }
+
+                // Detach from process's stack
+                KeUnstackDetachProcess( pKapcState );
+
+                ExFreePool( pKapcState );
+                pKapcState = NULL;
+            }
+            // Dereference EPROCESS pointer
+            ObDereferenceObject( pEproc );
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = STATUS_UNSUCCESSFUL;
+        DbgPrint( "Exception caught in GetDllByPeb()" );
+    }
+    return retVal;
 }
 
 /*++
