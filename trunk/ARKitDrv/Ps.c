@@ -473,7 +473,9 @@ VOID TraverseVadTreeInOrderWin2K3Vista( PMMADDRESS_NODE pVadNode )
 
             {
                 PMMVAD pMmVad = (PMMVAD)pVadNode;
-                if( MmIsAddressValid( pMmVad->ControlArea ) && MmIsAddressValid( pMmVad->ControlArea->FilePointer ) )
+                if( MmIsAddressValid( pMmVad->ControlArea ) &&
+                    MmIsAddressValid( pMmVad->ControlArea->FilePointer ) &&
+                    pMmVad->ControlArea->FilePointer->FileName.Length )
                 {
                     ULONG StartingVpn = 0;
                     ULONG EndingVpn = 0;
@@ -529,7 +531,9 @@ VOID TraverseVadTreeInOrderWin2KXP( PMMVAD pVadNode )
             TraverseVadTreeInOrderWin2KXP( pVadNode->LeftChild );
             
             // Get filename from file object
-            if( MmIsAddressValid( pVadNode->ControlArea ) && MmIsAddressValid( pVadNode->ControlArea->FilePointer ) )
+            if( MmIsAddressValid( pVadNode->ControlArea ) &&
+                MmIsAddressValid( pVadNode->ControlArea->FilePointer ) &&
+                pVadNode->ControlArea->FilePointer->FileName.Length )
             {
                 ULONG StartingVpn = 0;
                 ULONG EndingVpn = 0;

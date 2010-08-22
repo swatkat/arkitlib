@@ -143,7 +143,7 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwEprocOffset = 0x10;
                     g_globalData.dwThreadsProcess = 0x8b;
                     g_globalData.dwCID = 0x78;
-                    g_globalData.dwImageFilename = 0x7f;
+                    g_globalData.dwImageFilename = 0x1fc;
                     g_globalData.dwCrossThreadFlags = 0;
                     g_globalData.dwSeAuditOffset = 0;
                     g_globalData.dwProcessFlagsOffset = 0x1aa;
@@ -168,7 +168,7 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwEprocOffset = 0x08;
                     g_globalData.dwThreadsProcess = 0x088; // 0x220 byte offset
                     g_globalData.dwCID = 0x7b; // 0x1ec byte offset
-                    g_globalData.dwImageFilename = 0x5d; // 0x174 byte offset
+                    g_globalData.dwImageFilename = 0x174;
                     g_globalData.dwCrossThreadFlags = 0x92; // 0x248 byte offset
                     g_globalData.dwSeAuditOffset = 0x1f4;
                     g_globalData.dwProcessFlagsOffset = 0x248;
@@ -198,7 +198,7 @@ VOID InitGlobalsThread( PVOID pThrParam )
                             g_globalData.dwEprocOffset = 0x008;
                             g_globalData.dwThreadsProcess = 0x86; // 0x218 byte offset.
                             g_globalData.dwCID = 0x79; // 0x1e4 byte offset.
-                            g_globalData.dwImageFilename = 0x59; // 0x164 byte offset.
+                            g_globalData.dwImageFilename = 0x164;
                             g_globalData.dwCrossThreadFlags = 0x90; // 0x240 byte offset.
                             g_globalData.dwSeAuditOffset = 0x1e4;
                             g_globalData.dwProcessFlagsOffset = 0x240;
@@ -223,7 +223,7 @@ VOID InitGlobalsThread( PVOID pThrParam )
                             g_globalData.dwEprocOffset = 0x08;
                             g_globalData.dwThreadsProcess = 0x8a;
                             g_globalData.dwCID = 0x7d;
-                            g_globalData.dwImageFilename = 0x55;
+                            g_globalData.dwImageFilename = 0x154;
                             g_globalData.dwCrossThreadFlags = 0x94;
                             g_globalData.dwSeAuditOffset = 0x1d4;
                             g_globalData.dwProcessFlagsOffset = 0x248;
@@ -251,7 +251,7 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwEprocOffset = 0x08;
                     g_globalData.dwThreadsProcess = 0x86; // 0x218 byte offset
                     g_globalData.dwCID = 0x79; // 0x1e4 is byte offset
-                    g_globalData.dwImageFilename = 0x59; // 0x164 byte offset
+                    g_globalData.dwImageFilename = 0x164;
                     g_globalData.dwCrossThreadFlags = 0x90; // 0x240 byte offset
                     g_globalData.dwSeAuditOffset = 0x1e4;
                     g_globalData.dwProcessFlagsOffset = 0x240;
@@ -276,7 +276,7 @@ VOID InitGlobalsThread( PVOID pThrParam )
                     g_globalData.dwEprocOffset = 0x08;
                     g_globalData.dwThreadsProcess = 0; // Not present??!
                     g_globalData.dwCID = 0x83; // DWORD ptr offset
-                    g_globalData.dwImageFilename = 0x53; // DWORD ptr offset
+                    g_globalData.dwImageFilename = 0x14c;
                     g_globalData.dwCrossThreadFlags = 0x98; // DWORD ptr offset
                     g_globalData.dwSeAuditOffset = 0x1cc;
                     g_globalData.dwProcessFlagsOffset = 0x228;
@@ -466,41 +466,39 @@ NTSTATUS GetProcessPathName( PEPROCESS pEproc, char* szProcessImageName, UINT nS
     NTSTATUS retVal = STATUS_UNSUCCESSFUL;
     __try
     {
-        ANSI_STRING ansiImageName;
-        PSE_AUDIT_PROCESS_CREATION_INFO pseAudit = NULL;
-
-        if( MmIsAddressValid( pEproc ) )
+        if( IsProcessAlive( pEproc ) )
         {
-            RtlZeroMemory( szProcessImageName, nStrLen );
+            char* pszImageFileName = (char*)( (PBYTE)pEproc + g_globalData.dwImageFilename );
 
+            RtlZeroMemory( szProcessImageName, nStrLen );
             switch( g_globalData.eOSVer )
             {
             case eOS_WIN_2K:
                 {
                     // If Win2K, then get only process filename from EPROCESS
-                    RtlStringCchCopyA( szProcessImageName, nStrLen,
-                                       (char*)((PDWORD)pEproc + g_globalData.dwImageFilename) );
-                    retVal = STATUS_SUCCESS;
+                    if( MmIsAddressValid( pszImageFileName ) )
+                    {
+                        RtlStringCchCopyA( szProcessImageName, nStrLen, pszImageFileName );
+                        retVal = STATUS_SUCCESS;
+                    }
                 }
                 break;
 
             default:
                 {
                     // Try to get process full path from SE_AUDIT_PROCESS_CREATION_INFO
-                    pseAudit = (PSE_AUDIT_PROCESS_CREATION_INFO)((PBYTE)pEproc + g_globalData.dwSeAuditOffset);
+                    PSE_AUDIT_PROCESS_CREATION_INFO pseAudit = (PSE_AUDIT_PROCESS_CREATION_INFO)( (PBYTE)pEproc + g_globalData.dwSeAuditOffset );
                     if( MmIsAddressValid( pseAudit ) && pseAudit->ImageFileName->Name.Length )
                     {
-                        RtlUnicodeStringToAnsiString( &ansiImageName, &(pseAudit->ImageFileName->Name), 1 );
-                        RtlStringCchCopyA( szProcessImageName, nStrLen, ansiImageName.Buffer );
-                        RtlFreeAnsiString( &ansiImageName );
+                        RtlStringCchPrintfA( szProcessImageName, nStrLen, "%S", pseAudit->ImageFileName->Name.Buffer );
+                        retVal = STATUS_SUCCESS;
                     }
-                    if( 0 == strlen( szProcessImageName ) )
+                    else if( MmIsAddressValid( pszImageFileName ) )
                     {
                         // Otherwise get from EPROCESS
-                        RtlStringCchCopyA( szProcessImageName, nStrLen,
-                                           (char*)((PDWORD)pEproc + g_globalData.dwImageFilename) );
+                        RtlStringCchCopyA( szProcessImageName, nStrLen, pszImageFileName );
+                        retVal = STATUS_SUCCESS;
                     }
-                    retVal = STATUS_SUCCESS;
                 }
                 break;
             }
@@ -1078,11 +1076,13 @@ NTSTATUS NtZwTerminateProcess( DWORD dwPid )
         {
             retVal = ZwOpenProcess( &hProc, PROCESS_ALL_ACCESS, &oaProc, &procCid );
         }
+
 #ifdef ARKITDRV_DEBUG_PRINT
         DbgPrint( "NtZwTerminateProcess: ZwOpenProcess returned 0x%X, pid %ld, handle 0x%X", retVal, dwPid, hProc );
 #endif // ARKITDRV_DEBUG_PRINT
-        // Terminate process using NtTerminateProcess if we have valid pointer,
-        // otherwise use ZwTerminateProcess.
+
+        // Terminate process using NtTerminateProcess if
+        // we have valid pointer, otherwise use ZwTerminateProcess.
         if( STATUS_SUCCESS == retVal )
         {
             if( MmIsAddressValid( pNtTerminateProcess ) )
@@ -1093,9 +1093,11 @@ NTSTATUS NtZwTerminateProcess( DWORD dwPid )
             {
                 retVal = ZwTerminateProcess( hProc, 0 );
             }
+
 #ifdef ARKITDRV_DEBUG_PRINT
         DbgPrint( "NtZwTerminateProcess: ZwTerminateProcess returned 0x%X, pid %ld, handle 0x%X", retVal, dwPid, hProc );
 #endif // ARKITDRV_DEBUG_PRINT
+
         ZwClose( hProc );
         }
     }
@@ -1160,9 +1162,11 @@ NTSTATUS NtZwTerminateProcessByThreads( DWORD dwPid )
                         procCid.UniqueThread = (HANDLE)dwTid;
 
                         retVal = pNtOpenThread( &hProc, THREAD_ALL_ACCESS, &oaProc, &procCid );
+
 #ifdef ARKITDRV_DEBUG_PRINT
                         DbgPrint( "NtZwTerminateProcessByThreads: NtOpenThread returned 0x%X, pid %ld, handle 0x%X", retVal, dwPid, hProc );
 #endif // ARKITDRV_DEBUG_PRINT
+
                         if( STATUS_SUCCESS == retVal )
                         {
                             retVal = pNtTerminateThread( hProc, 0 );
