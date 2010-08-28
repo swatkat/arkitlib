@@ -20,7 +20,7 @@ VOID ScanAndGetProcessCountThread( PVOID pThrParam );
 NTSTATUS GetProcByHandleTableScan();
 NTSTATUS GetProcByPidScan();
 NTSTATUS GetProcByTidScan();
-BOOLEAN KillProcess( DWORD dwPid );
+BOOLEAN KillProcess( PDWORD pdwPid );
 VOID KillProcessThread( PVOID pThrParam );
 
 // DLL routines
@@ -41,6 +41,8 @@ NTSTATUS GetDriverByDriverObjectScan();
 // SSDT routines
 UINT ScanAndGetSSDTHooksCount();
 VOID ScanAndGetSSDTHooksCountThread( PVOID pThrParam );
+BOOLEAN FixSSDTHook( PARKFIXSSDT pFixSsdtHookData );
+VOID FixSSDTHookThread( PVOID pThrParam );
 
 // Sysenter hook routines
 BOOLEAN ScanAndGetSysenterHook( PARKSYSENTERHOOK pSysenterHookData );

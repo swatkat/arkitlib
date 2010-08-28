@@ -15,6 +15,7 @@ PDRIVER_OBJECT g_pMyDriverObj = NULL;
 OS_SPEC_DATA g_globalData = {0};
 ARKNTAPI g_NtApiData = {0};
 NTOSKRNLDATA g_NtOSKernel = {0};
+SSDT_MDL g_mdlSSDT = {0};
 
 /*++
 * @method: ThreadSpooler
@@ -299,6 +300,9 @@ VOID InitGlobalsThread( PVOID pThrParam )
                 }
                 break;
             }
+
+            // Initialize SSDT MDL
+            InitSsdtMdl();
         }
     }
     __except( EXCEPTION_EXECUTE_HANDLER )
@@ -368,6 +372,72 @@ VOID InitNtApiDataThread( PVOID pThrParam )
         DbgPrint( "Exception caught in InitNtApiDataThread()" );
     }
     PsTerminateSystemThread( STATUS_SUCCESS );
+}
+
+/*++
+* @method: InitSsdtMdl
+*
+* @description: Initialize SSDT MDL
+*
+* @input: None
+*
+* @output: NTSTATUS
+*
+*--*/
+NTSTATUS InitSsdtMdl()
+{
+    NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+    __try
+    {
+        // Create MDL
+        g_mdlSSDT.pmdlSSDT = MmCreateMdl( NULL,
+                                          KeServiceDescriptorTable.ServiceTableBase,
+                                          KeServiceDescriptorTable.NumberOfServices*4 );
+        MmBuildMdlForNonPagedPool( g_mdlSSDT.pmdlSSDT );
+        g_mdlSSDT.pmdlSSDT->MdlFlags = g_mdlSSDT.pmdlSSDT->MdlFlags | MDL_MAPPED_TO_SYSTEM_VA;
+        g_mdlSSDT.ppvMappedSSDT = MmMapLockedPages( g_mdlSSDT.pmdlSSDT, KernelMode );
+
+        if( g_mdlSSDT.pmdlSSDT && g_mdlSSDT.ppvMappedSSDT )
+        {
+            retVal = STATUS_SUCCESS;
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = STATUS_UNSUCCESSFUL;
+        DbgPrint( "Exception caught in InitSsdtMdl()" );
+    }
+    return retVal;
+}
+
+/*++
+* @method: DeInitSsdtMdl
+*
+* @description: Free SSDT MDL
+*
+* @input: None
+*
+* @output: NTSTATUS
+*
+*--*/
+NTSTATUS DeInitSsdtMdl()
+{
+    NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+    __try
+    {
+        if( g_mdlSSDT.pmdlSSDT && g_mdlSSDT.ppvMappedSSDT )
+        {
+            MmUnmapLockedPages( g_mdlSSDT.ppvMappedSSDT, g_mdlSSDT.pmdlSSDT );
+            IoFreeMdl( g_mdlSSDT.pmdlSSDT );
+            retVal = STATUS_SUCCESS;
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = STATUS_UNSUCCESSFUL;
+        DbgPrint( "Exception caught in DeInitSsdtMdl()" );
+    }
+    return retVal;
 }
 
 /*++

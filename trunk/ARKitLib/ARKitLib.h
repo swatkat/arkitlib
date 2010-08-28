@@ -64,6 +64,10 @@ public:
     // Method to get SSDT hooks
     bool getSSDTHooksList( std::list<ARKSSDTHOOK>& ssdtHookList );
 
+    // Methods to fix SSDT hook
+    bool fixSsdtHook( UINT unSsdtIndex );
+    bool fixSsdtHook( std::string& szHookedZwFuncName );
+
     // Method to get Sysenter hook data
     bool getSysenterHook( ARKSYSENTERHOOK& sysenterHookData );
 

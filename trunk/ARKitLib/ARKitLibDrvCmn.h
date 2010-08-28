@@ -94,7 +94,12 @@ typedef enum _eArkFixIssueType {
 
 typedef struct _ARKFIX {
     eArkFixIssueType eType;
-    BYTE fixData[ARKITLIB_STR_LEN];
+    BYTE fixData[ARKITLIB_FIXDATA_LEN];
 } ARKFIX, *PARKFIX;
+
+typedef struct _ARKFIXSSDT {
+    DWORD dwSsdtIndex;
+    DWORD dwOrigAddr;
+} ARKFIXSSDT, *PARKFIXSSDT;
 
 #endif // __ARKITLIBDRVCMN_H__
