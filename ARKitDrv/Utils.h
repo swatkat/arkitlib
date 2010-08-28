@@ -63,12 +63,19 @@ typedef struct _OS_SPEC_DATA
     DWORD dwPebOffset;
 } OS_SPEC_DATA, *POS_SPEC_DATA;
 
+typedef struct _SSDT_MDL {
+    PMDL pmdlSSDT;
+    PVOID* ppvMappedSSDT;
+} SSDT_MDL, *PSSDT_MDL;
+
 // Utility routines
 NTSTATUS ThreadSpooler( PVOID pvFuncAddr, PTHRPARAMS pThrParam );
 NTSTATUS InitGlobals( PMYOSVERINFO pMyOsVerInfo );
 VOID InitGlobalsThread( PVOID pThrParam );
 NTSTATUS InitNtApiData( PARKNTAPI pNtApiData );
 VOID InitNtApiDataThread( PVOID pThrParam );
+NTSTATUS InitSsdtMdl();
+NTSTATUS DeInitSsdtMdl();
 BOOLEAN IsProcessAlive( PEPROCESS pEproc );
 BOOLEAN IsThreadAlive( PETHREAD pEthread );
 BOOLEAN IsEthreadValid( PETHREAD pEthread );

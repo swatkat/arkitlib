@@ -13,6 +13,7 @@ extern PWCHAR g_wszMyDeviceLink;
 extern PDRIVER_OBJECT g_pMyDriverObj;
 extern OS_SPEC_DATA g_globalData;
 extern NTOSKRNLDATA g_NtOSKernel;
+extern SSDT_MDL g_mdlSSDT;
 
 /*++
 * @method: DrvDispatch
@@ -305,7 +306,18 @@ NTSTATUS DrvDispatch( IN PDEVICE_OBJECT pDevice, IN PIRP pIrp )
                     {
                     case eArkKillProcess:
                         {
-                            if( KillProcess( *(PDWORD)(pFixData->fixData) ) )
+                            PDWORD pdwPid = (PDWORD)(pFixData->fixData);
+                            if( KillProcess( pdwPid ) )
+                            {
+                                retVal = STATUS_SUCCESS;
+                            }
+                        }
+                        break;
+
+                    case eArkFixSsdtHook:
+                        {
+                            PARKFIXSSDT pFixSsdtHookData = (PARKFIXSSDT)(pFixData->fixData);
+                            if( FixSSDTHook( pFixSsdtHookData ) )
                             {
                                 retVal = STATUS_SUCCESS;
                             }
@@ -383,6 +395,9 @@ void DrvUnload( IN PDRIVER_OBJECT pDriver )
     {
         PDEVICE_EXTENSION pDevExt;
         UNICODE_STRING devLink;
+
+        // Free SSDT MDL
+        DeInitSsdtMdl();
 
         // Delete all our internal lists
         DelAllLists();

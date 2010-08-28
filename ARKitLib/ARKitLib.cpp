@@ -729,6 +729,90 @@ bool ARKitLib::getSSDTHooksList( std::list<ARKSSDTHOOK>& ssdtHookList )
 }
 
 /*++
+* @method: ARKitLib::fixSsdtHook
+*
+* @description: Fix SSDT hook for the given ZwXxx function
+*
+* @input: std::string& szHookedZwFuncName
+*
+* @output: true if success, otherwise false
+*
+*--*/
+bool ARKitLib::fixSsdtHook( std::string& szHookedZwFuncName )
+{
+    bool retVal = false;
+
+    // Return false if we don't have our device handle
+    if( !ARKITLIB_ISVALIDHANDLE( m_drvHandle ) )
+    {
+        return retVal;
+    }
+
+    if( szHookedZwFuncName.length() )
+    {
+        UINT unHookedSsdtIndex = 0;
+        ARKitLibUtils objUtils;
+
+        // Get SSDT index by ZwXxx function name
+        if( objUtils.getSsdtIndexByZwFuncName( szHookedZwFuncName, unHookedSsdtIndex ) )
+        {
+            retVal = fixSsdtHook( unHookedSsdtIndex );
+        }
+    }
+
+    return retVal;
+}
+
+/*++
+* @method: ARKitLib::fixSsdtHook
+*
+* @description: Fix SSDT hook for the given SSDT index
+*
+* @input: UINT unSsdtIndex
+*
+* @output: true if success, otherwise false
+*
+*--*/
+bool ARKitLib::fixSsdtHook( UINT unSsdtIndex )
+{
+    bool retVal = false;
+
+    // Return false if we don't have our device handle
+    if( !ARKITLIB_ISVALIDHANDLE( m_drvHandle ) )
+    {
+        return retVal;
+    }
+    
+    ARKFIX fixData;
+    PARKFIXSSDT pFixSsdtHookData = NULL;
+    std::string szNtFuncName("");
+    ARKitLibUtils objUtils;
+    
+    ::ZeroMemory( &fixData, sizeof( ARKFIX ) );
+
+    fixData.eType = eArkFixSsdtHook;
+    pFixSsdtHookData = (PARKFIXSSDT)(fixData.fixData);
+    pFixSsdtHookData->dwSsdtIndex = (DWORD)unSsdtIndex;
+
+    // Get original address from NT kernel image
+    if( objUtils.getNtFuncAddressBySsdtIndex( unSsdtIndex, szNtFuncName, pFixSsdtHookData->dwOrigAddr ) )
+    {
+        DWORD bytesRet = 0;
+        BOOL devIoRslt = ::DeviceIoControl( m_drvHandle,
+                                            IOCTL_FIX_ISSUES,
+                                            &fixData,
+                                            sizeof( ARKFIX ),
+                                            NULL,
+                                            0,
+                                            &bytesRet, NULL );
+        retVal = devIoRslt ? true : false;
+    }
+
+    return retVal;
+}
+
+
+/*++
 * @method: ARKitLib::getSysenterHook
 *
 * @description: Returns Sysenter hook

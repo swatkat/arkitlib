@@ -660,31 +660,34 @@ NTSTATUS GetDllByPeb( DWORD dwPid )
 *
 * @description: Wrapper to thread function to kill a process
 *
-* @input: DWORD dwPid
+* @input: PDWORD pdwPid
 *
 * @output: BOOLEAN
 *
 *--*/
-BOOLEAN KillProcess( DWORD dwPid )
+BOOLEAN KillProcess( PDWORD pdwPid )
 {
-    BOOLEAN bKilled = FALSE;
+    BOOLEAN bRetVal = FALSE;
     __try
     {
-        // Create a thread to kill a process
-        THRPARAMS stThrParams = {0};
-        stThrParams.pParam = &dwPid;
-        stThrParams.dwParamLen = sizeof( DWORD );
-        if( STATUS_SUCCESS == ThreadSpooler( KillProcessThread, &stThrParams ) )
+        if( MmIsAddressValid( pdwPid ) )
         {
-            bKilled = stThrParams.bResult;
+            // Create a thread to kill a process
+            THRPARAMS stThrParams = {0};
+            stThrParams.pParam = pdwPid;
+            stThrParams.dwParamLen = sizeof( PDWORD );
+            if( STATUS_SUCCESS == ThreadSpooler( KillProcessThread, &stThrParams ) )
+            {
+                bRetVal = stThrParams.bResult;
+            }
         }
     }
     __except( EXCEPTION_EXECUTE_HANDLER )
     {
-        bKilled = FALSE;
+        bRetVal = FALSE;
         DbgPrint( "Exception caught in KillProcess()" );
     }
-    return bKilled;
+    return bRetVal;
 }
 
 /*++
@@ -705,21 +708,22 @@ VOID KillProcessThread( PVOID pThrParam )
         {
             NTSTATUS retVal = STATUS_UNSUCCESSFUL;
             PTHRPARAMS pParams = (PTHRPARAMS)pThrParam;
+            DWORD dwPid = *(PDWORD)(pParams->pParam);
 
             // Try killing process using NtTerminateProcess
-            retVal = NtZwTerminateProcess( *(PDWORD)(pParams->pParam) );
+            retVal = NtZwTerminateProcess( dwPid );
 
             // If the above method fails, then try killing all
             // threads of the process
             if( STATUS_SUCCESS != retVal )
             {
-                retVal = NtZwTerminateProcessByThreads( *(PDWORD)(pParams->pParam) );
+                retVal = NtZwTerminateProcessByThreads( dwPid );
             }
 
             // Set the result to true if we are able to kill process
             if( STATUS_SUCCESS == retVal )
             {
-                ((PTHRPARAMS)pThrParam)->bResult = TRUE;
+                pParams->bResult = TRUE;
             }
         }
     }

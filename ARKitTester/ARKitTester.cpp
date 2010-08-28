@@ -91,6 +91,39 @@ int main()
             printf( "\nFailed to kill process\n" );
         }
     }
+
+    // Fix SSDT hook by index
+    {
+        UINT unSsdtIndex = 0;
+        printf( "\n\n\nEnter SSDT index to fix: " );
+        scanf( "%d", &unSsdtIndex );
+        if( obj.fixSsdtHook( unSsdtIndex ) )
+        {
+            printf( "\nSSDT hook fixed successfully!\n" );
+        }
+        else
+        {
+            printf( "\nFailed to fix SSDT hook\n" );
+        }
+    }
+
+    // Fix SSDT hook by name
+    {
+        char szZwFuncName[ARKITLIB_STR_LEN];
+        ::ZeroMemory( szZwFuncName, ARKITLIB_STR_LEN );
+        printf( "\n\n\nEnter SSDT ZwXxx function name to fix: " );
+        scanf( "%s", szZwFuncName );
+
+        std::string strZwFuncName( szZwFuncName );
+        if( obj.fixSsdtHook( strZwFuncName ) )
+        {
+            printf( "\nSSDT hook fixed successfully!\n" );
+        }
+        else
+        {
+            printf( "\nFailed to fix SSDT hook\n" );
+        }
+    }
     
     return 0;
 }

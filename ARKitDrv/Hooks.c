@@ -11,6 +11,7 @@
 extern PDRIVER_OBJECT g_pMyDriverObj;
 extern OS_SPEC_DATA g_globalData;
 extern NTOSKRNLDATA g_NtOSKernel;
+extern SSDT_MDL g_mdlSSDT;
 
 /*++
 * @method: ScanFunctionInlineHook
@@ -395,6 +396,84 @@ VOID ScanAndGetSSDTHooksCountThread( PVOID pThrParam )
     __except( EXCEPTION_EXECUTE_HANDLER )
     {
         DbgPrint( "Exception caught in ScanAndGetSSDTHooksCountThread()" );
+    }
+    PsTerminateSystemThread( STATUS_SUCCESS );
+}
+
+/*++
+* @method: FixSSDTHook
+*
+* @description: Wrapper to thread function to fix SSDT hook
+*
+* @input: PARKFIXSSDT pFixSsdtHookData
+*
+* @output: BOOLEAN
+*
+*--*/
+BOOLEAN FixSSDTHook( PARKFIXSSDT pFixSsdtHookData )
+{
+    BOOLEAN bRetVal = FALSE;
+    __try
+    {
+        if( MmIsAddressValid( pFixSsdtHookData ) )
+        {
+            // Create a thread to fix SSDT hook
+            THRPARAMS stThrParams = {0};
+            stThrParams.pParam = pFixSsdtHookData;
+            stThrParams.dwParamLen = sizeof( PARKFIXSSDT );
+            if( STATUS_SUCCESS == ThreadSpooler( FixSSDTHookThread, &stThrParams ) )
+            {
+                bRetVal = stThrParams.bResult;
+            }
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        bRetVal = FALSE;
+        DbgPrint( "Exception caught in FixSSDTHook()" );
+    }
+    return bRetVal;
+}
+
+/*++
+* @method: FixSSDTHookThread
+*
+* @description: Fix SSDT hook
+*
+* @input: PVOID pThrParam
+*
+* @output: None
+*
+*--*/
+VOID FixSSDTHookThread( PVOID pThrParam )
+{
+    __try
+    {
+        if( MmIsAddressValid( pThrParam ) )
+        {
+            NTSTATUS retVal = STATUS_UNSUCCESSFUL;
+            PTHRPARAMS pParams = (PTHRPARAMS)pThrParam;
+            PARKFIXSSDT pFixSsdtHookData = (PARKFIXSSDT)(pParams->pParam);
+
+            DisableReadOnly();
+            if( g_mdlSSDT.pmdlSSDT && g_mdlSSDT.ppvMappedSSDT )
+            {
+#ifdef ARKITDRV_DEBUG_PRINT
+                DbgPrint( "FixSSDTHookThread: SSDT index %ld, Original address: 0x%x",
+                          pFixSsdtHookData->dwSsdtIndex, pFixSsdtHookData->dwOrigAddr );
+#endif // ARKITDRV_DEBUG_PRINT
+
+                // Do an atomic exchange of SSDT address
+                InterlockedExchange( (PLONG)&(g_mdlSSDT.ppvMappedSSDT)[pFixSsdtHookData->dwSsdtIndex],
+                                     (LONG)(pFixSsdtHookData->dwOrigAddr) );
+                pParams->bResult = TRUE;
+            }
+            EnableReadOnly();
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        DbgPrint( "Exception caught in FixSSDTHookThread()" );
     }
     PsTerminateSystemThread( STATUS_SUCCESS );
 }
