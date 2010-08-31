@@ -10,6 +10,8 @@
 
 #include "ARKitDefines.h"
 
+//#define ARKITDRV_DEBUG_PRINT
+
 // ARKitDrv driver IOCTL defines
 #define FILE_DEVICE_UNKNOWN     0x00000022
 #define IOCTL_UNKNOWN_BASE      FILE_DEVICE_UNKNOWN
@@ -94,12 +96,18 @@ typedef enum _eArkFixIssueType {
 
 typedef struct _ARKFIX {
     eArkFixIssueType eType;
-    BYTE fixData[ARKITLIB_FIXDATA_LEN];
+    BYTE cFixData[ARKITLIB_FIXDATA_LEN];
 } ARKFIX, *PARKFIX;
 
 typedef struct _ARKFIXSSDT {
     DWORD dwSsdtIndex;
     DWORD dwOrigAddr;
 } ARKFIXSSDT, *PARKFIXSSDT;
+
+typedef struct _ARKFIXINLINEHOOK {
+    BYTE cFuncData[ARKITLIB_BYTES_TO_FIX];
+    char szFuncName[ARKITLIB_STR_LEN];
+    DWORD dwFuncAddr;
+} ARKFIXINLINEHOOK, *PARKFIXINLINEHOOK;
 
 #endif // __ARKITLIBDRVCMN_H__

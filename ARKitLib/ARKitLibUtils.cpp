@@ -145,35 +145,41 @@ bool ARKitLibUtils::getZwFuncNameBySsdtIndex( UINT unIndex, std::string& zwFuncN
     bool retVal = false;
     try
     {
-        std::list<std::string> ntExports;
+        std::list<ARKUTILEXPORTENTRY> exportList;
         std::string ntDllName( NTDLL_IMAGE_NAME );
 
-        ntExports.clear();
+        exportList.clear();
         zwFuncName.assign( "" );
 
         // Get all exports from Ntdll
-        if( exportWalker( ntDllName, ntExports ) )
+        if( exportWalker( ntDllName, exportList, false ) )
         {
+            std::string tmpStr;
             std::vector<std::string> ssdtNames;
+
             ssdtNames.clear();
-            std::list<std::string>::iterator itFunc = ntExports.begin();
-            for( ; itFunc != ntExports.end(); itFunc++ )
+            std::list<ARKUTILEXPORTENTRY>::iterator itExport = exportList.begin();
+            for( ; itExport != exportList.end(); itExport++ )
             {
-                // Copy all exports beginning with "Zw" to vector
-                if( 0 == itFunc->find( "Zw" ) )
+                // Copy funtion name to a temporary string
+                tmpStr.assign( itExport->szFuncName );
+
+                // Now, copy all exports beginning with "Zw" to vector
+                if( 0 == tmpStr.find( "Zw" ) )
                 {
                     // These functions will be at the end of SSDT, but not in Ntdll export table.
-                    if( ( std::string::npos == itFunc->find( "ZwCreateKeyedEvent" ) ) &&
-                        ( std::string::npos == itFunc->find( "ZwOpenKeyedEvent" ) ) &&
-                        ( std::string::npos == itFunc->find( "ZwReleaseKeyedEvent" ) ) &&
-                        ( std::string::npos == itFunc->find( "ZwWaitForKeyedEvent" ) ) &&
-                        ( std::string::npos == itFunc->find( "ZwQueryPortInformationProcess" ) ) )
+                    if( ( std::string::npos == tmpStr.find( "ZwCreateKeyedEvent" ) ) &&
+                        ( std::string::npos == tmpStr.find( "ZwOpenKeyedEvent" ) ) &&
+                        ( std::string::npos == tmpStr.find( "ZwReleaseKeyedEvent" ) ) &&
+                        ( std::string::npos == tmpStr.find( "ZwWaitForKeyedEvent" ) ) &&
+                        ( std::string::npos == tmpStr.find( "ZwQueryPortInformationProcess" ) ) )
                     {
-                        ssdtNames.push_back( *itFunc );
+                        ssdtNames.push_back( tmpStr );
                     }
                 }
             }
 
+            // Push back remaining ZwXxx functions
             if( !ssdtNames.empty() )
             {
                 ssdtNames.push_back( "ZwCreateKeyedEvent" );
@@ -248,12 +254,12 @@ bool ARKitLibUtils::getSsdtIndexByZwFuncName( std::string zwFuncName, UINT& unIn
 *
 * @description: Walks the export table of given image
 *
-* @input: std::string& dllFileName, std::list<std::string>& expFuncList
+* @input: std::string& dllFileName, std::list<ARKUTILEXPORTENTRY>& expFuncList
 *
 * @output: true if success, otherwise false
 *
 *--*/
-bool ARKitLibUtils::exportWalker( std::string& dllFileName, std::list<std::string>& expFuncList )
+bool ARKitLibUtils::exportWalker( std::string& dllFileName, std::list<ARKUTILEXPORTENTRY>& expFuncList, bool bReadFuncData )
 {
     bool retVal = false;
     try
@@ -290,11 +296,29 @@ bool ARKitLibUtils::exportWalker( std::string& dllFileName, std::list<std::strin
                         DWORD dwLimit = ( dwNumberOfFunctions > dwNumberOfNames ) ? dwNumberOfNames : dwNumberOfFunctions;
 
                         // Loop through the names
-                        std::string funcName( "" );
+                        ARKUTILEXPORTENTRY exportEntry;
                         for( UINT nFuncIndex = 0; nFuncIndex < dwLimit; nFuncIndex++ )
                         {
-                            funcName.assign( (char*)( (PBYTE)hModBase + pdwAddressOfNames[nFuncIndex] ) );
-                            expFuncList.push_back( funcName );
+                            ::ZeroMemory( &exportEntry, sizeof( ARKUTILEXPORTENTRY ) );
+
+                            // Get function name and address
+                            ::StringCchPrintfA( exportEntry.szFuncName, ARKITLIB_STR_LEN, "%s",
+                                                (char*)( (PBYTE)hModBase + pdwAddressOfNames[nFuncIndex] ) );
+                            exportEntry.dwFuncAddress = (DWORD)::GetProcAddress( hModBase, exportEntry.szFuncName );
+
+                            // If read-data flag is set, then read first few bytes
+                            // of function from this image
+                            if( bReadFuncData )
+                            {
+                                PBYTE pFuncPtr = (PBYTE)exportEntry.dwFuncAddress;
+                                for( UINT i = 0; ( i < ARKITLIB_BYTES_TO_FIX ) && ( pFuncPtr + i ) ; i++ )
+                                {
+                                    exportEntry.cFuncData[i] = pFuncPtr[i];
+                                }
+                            }
+
+                            // Push it to list
+                            expFuncList.push_back( exportEntry );
                         }
                     }
                 }
@@ -575,6 +599,57 @@ bool ARKitLibUtils::getDriverBaseAddress( std::string& driverName, DWORD& dwBase
     {
         retVal = false;
         ::OutputDebugString( "ARKitLibUtils::getDriverBaseAddress: Exception caught" );
+    }
+    return retVal;
+}
+
+/*++
+* @method: ARKitLibUtils::getFuncDataByName
+*
+* @description: Gets first few bytes of a function from image
+*
+* @input: std::string& funcName, PBYTE pFuncData, UINT unFuncDataSize
+*
+* @output: true if success, otherwise false
+*
+*--*/
+bool ARKitLibUtils::getFuncDataByName( std::string& funcName, PBYTE pFuncData, UINT unFuncDataSize )
+{
+    bool retVal = false;
+    try
+    {
+        if( funcName.length() && pFuncData && unFuncDataSize )
+        {
+            ARKitLibUtils objUtil;
+            std::list<ARKUTILEXPORTENTRY> exportList;
+            std::string ntKernelName;
+
+            exportList.clear();
+            objUtil.getNtKernelName( ntKernelName );
+
+            // Get all functions exported by NT kernel
+            if( objUtil.exportWalker( ntKernelName, exportList, true ) )
+            {
+                std::list<ARKUTILEXPORTENTRY>::iterator itExport = exportList.begin();
+                for( ; itExport != exportList.end(); itExport++ )
+                {
+                    // Find the required function in the export list
+                    if( 0 == funcName.compare( itExport->szFuncName ) )
+                    {
+                        // Copy the data
+                        unFuncDataSize = ( unFuncDataSize > ARKITLIB_BYTES_TO_FIX ) ? ARKITLIB_BYTES_TO_FIX : unFuncDataSize;
+                        ::CopyMemory( pFuncData, itExport->cFuncData, unFuncDataSize );
+                        retVal = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    catch(...)
+    {
+        retVal = false;
+        ::OutputDebugString( "ARKitLibUtils::getFuncDataByName: Exception caught" );
     }
     return retVal;
 }

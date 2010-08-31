@@ -51,6 +51,8 @@ VOID ScanAndGetSysenterHookThread( PVOID pThrParam );
 // Kernel inline hook routines
 BOOLEAN ScanFunctionInlineHook( PARKINLINEHOOK pFuncInlineHookData );
 VOID ScanFunctionInlineHookThread( PVOID pThrParam );
+BOOLEAN FixInlineHook( PARKFIXINLINEHOOK pFixInlineHook );
+VOID FixInlineHookThread( PVOID pThrParam );
 
 // Driver routines
 NTSTATUS DrvDispatch( IN PDEVICE_OBJECT pDevice, IN PIRP pIrp );

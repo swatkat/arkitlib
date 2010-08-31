@@ -13,8 +13,6 @@
 #include "ARKitDefines.h"
 #include "Lists.h"
 
-//#define ARKITDRV_DEBUG_PRINT
-
 // Macros
 #define VALIDATE_LIST_BUFF_SIZE( totalBuffSize, dataType, listType ) ( ( totalBuffSize / sizeof( dataType ) ) <= GetListCount( listType ) )
 

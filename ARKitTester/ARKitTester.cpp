@@ -124,6 +124,24 @@ int main()
             printf( "\nFailed to fix SSDT hook\n" );
         }
     }
+
+    // Fix inline hook by name
+    {
+        char szFuncName[ARKITLIB_STR_LEN];
+        ::ZeroMemory( szFuncName, ARKITLIB_STR_LEN );
+        printf( "\n\n\nEnter kernel function name to fix: " );
+        scanf( "%s", szFuncName );
+
+        std::string strFuncName( szFuncName );
+        if( obj.fixInlineHook( strFuncName ) )
+        {
+            printf( "\nInline hook fixed successfully!\n" );
+        }
+        else
+        {
+            printf( "\nFailed to fix inline hook\n" );
+        }
+    }
     
     return 0;
 }

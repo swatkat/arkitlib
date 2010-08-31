@@ -475,7 +475,7 @@ bool ARKitLib::killProcess( DWORD dwPid )
 
         ::ZeroMemory( &fixData, sizeof( ARKFIX ) );
         fixData.eType = eArkKillProcess;
-        ::CopyMemory( fixData.fixData, &dwPid, sizeof( DWORD ) );
+        ::CopyMemory( fixData.cFixData, &dwPid, sizeof( DWORD ) );
 
         BOOL devIoRslt = ::DeviceIoControl( m_drvHandle,
                                             IOCTL_FIX_ISSUES,
@@ -552,11 +552,14 @@ bool ARKitLib::getDllList( DWORD dwPid, std::list<ARKDLL>& dllList )
                     {
                         // Trim the DLL name
                         tempStr.assign( pDllArray[i].dllName );
-                        objUtil.removeDeviceName( tempStr );
-                        ::StringCchCopy( pDllArray[i].dllName, ARKITLIB_STR_LEN, tempStr.c_str() );
+                        if( tempStr.length() )
+                        {
+                            objUtil.removeDeviceName( tempStr );
+                            ::StringCchCopy( pDllArray[i].dllName, ARKITLIB_STR_LEN, tempStr.c_str() );
 
-                        // Push to callier supplied list
-                        dllList.push_back( pDllArray[i] );
+                            // Push to callier supplied list
+                            dllList.push_back( pDllArray[i] );
+                        }
                     }
                 }
                 delete [] pDllArray;
@@ -791,7 +794,7 @@ bool ARKitLib::fixSsdtHook( UINT unSsdtIndex )
     ::ZeroMemory( &fixData, sizeof( ARKFIX ) );
 
     fixData.eType = eArkFixSsdtHook;
-    pFixSsdtHookData = (PARKFIXSSDT)(fixData.fixData);
+    pFixSsdtHookData = (PARKFIXSSDT)(fixData.cFixData);
     pFixSsdtHookData->dwSsdtIndex = (DWORD)unSsdtIndex;
 
     // Get original address from NT kernel image
@@ -874,14 +877,14 @@ bool ARKitLib::getKernelInlineHooks( std::list<ARKINLINEHOOK>& hookList )
     }
 
     ARKitLibUtils objUtil;
-    std::list<std::string> ntKernelExports;
+    std::list<ARKUTILEXPORTENTRY> exportList;
     std::string ntKernelName;
 
-    ntKernelExports.clear();
+    exportList.clear();
     objUtil.getNtKernelName( ntKernelName );
 
     // Get all functions exported by NT kernel
-    if( objUtil.exportWalker( ntKernelName, ntKernelExports ) )
+    if( objUtil.exportWalker( ntKernelName, exportList, false ) )
     {
         DWORD bytesRet = 0;
         
@@ -903,13 +906,13 @@ bool ARKitLib::getKernelInlineHooks( std::list<ARKINLINEHOOK>& hookList )
             // Now, loop through NT kernel exports and scan them
             std::string tempStr( "" );
             ARKINLINEHOOK funcInlineHookData;
-            std::list<std::string>::iterator itFunc = ntKernelExports.begin();
-            for( ; itFunc != ntKernelExports.end(); itFunc++ )
+            std::list<ARKUTILEXPORTENTRY>::iterator itExport = exportList.begin();
+            for( ; itExport != exportList.end(); itExport++ )
             {
                 ::ZeroMemory( &funcInlineHookData, sizeof( ARKINLINEHOOK ) );
 
                 // Copy kernel exported function name that is to be scanned
-                ::StringCchCopy( funcInlineHookData.funcName, ARKITLIB_STR_LEN, itFunc->c_str() );
+                ::StringCchCopy( funcInlineHookData.funcName, ARKITLIB_STR_LEN, itExport->szFuncName );
                 devIoRslt = ::DeviceIoControl( m_drvHandle,
                                                IOCTL_GET_KINLINEHOOK,
                                                &funcInlineHookData,
@@ -992,5 +995,59 @@ bool ARKitLib::getKernelInlineHooks( std::list<ARKINLINEHOOK>& hookList )
 
     retVal = !hookList.empty();
     
+    return retVal;
+}
+
+/*++
+* @method: ARKitLib::fixInlineHook
+*
+* @description: Fix inline hook in an exported kernel function
+*
+* @input: std::string& szHookedFuncName
+*
+* @output: true if success, otherwise false
+*
+* @remarks: Only exported functions of NT kernel supported as of now
+*
+*--*/
+bool ARKitLib::fixInlineHook( std::string& szHookedFuncName )
+{
+    bool retVal = false;
+
+    // Return false if we don't have our device handle
+    if( !ARKITLIB_ISVALIDHANDLE( m_drvHandle ) )
+    {
+        return retVal;
+    }
+
+    if( szHookedFuncName.length() )
+    {
+        ARKFIX fixData;
+        PARKFIXINLINEHOOK pFixInlineHookData = NULL;
+        ARKitLibUtils objUtil;
+
+        ::ZeroMemory( &fixData, sizeof( ARKFIX ) );
+        fixData.eType = eArkFixInlineHook;
+
+        pFixInlineHookData = (PARKFIXINLINEHOOK)(fixData.cFixData);
+        ::StringCchCopyA( pFixInlineHookData->szFuncName, ARKITLIB_STR_LEN, szHookedFuncName.c_str() );
+        retVal = objUtil.getFuncDataByName( szHookedFuncName,
+                                            pFixInlineHookData->cFuncData,
+                                            ARKITLIB_BYTES_TO_FIX );
+
+        if( retVal )
+        {
+            DWORD bytesRet = 0;
+            BOOL devIoRslt = ::DeviceIoControl( m_drvHandle,
+                                                IOCTL_FIX_ISSUES,
+                                                &fixData,
+                                                sizeof( ARKFIX ),
+                                                NULL,
+                                                0,
+                                                &bytesRet, NULL );
+            retVal = devIoRslt ? true : false;
+        }
+    }
+
     return retVal;
 }

@@ -73,6 +73,9 @@ public:
 
     // Method to get kernel inline hooks
     bool getKernelInlineHooks( std::list<ARKINLINEHOOK>& hookList );
+
+    // Method to fix kernel inline hook
+    bool fixInlineHook( std::string& szHookedFuncName );
 };
 
 #endif

@@ -14,6 +14,7 @@
 // Common defines
 #define ARKITLIB_STR_LEN                    MAX_PATH
 #define ARKITLIB_FIXDATA_LEN                (ARKITLIB_STR_LEN*2)
+#define ARKITLIB_BYTES_TO_FIX               32
 
 // Data structures used between ARKitLib and apps using this lib
 typedef struct _ARKPROCESS {
