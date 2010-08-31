@@ -60,6 +60,13 @@ typedef NTSTATUS (WINAPI *NTQUERYSYSTEMINFORMATION)( UINT,
                                                      ULONG,
                                                      PULONG );
 
+typedef struct _ARKUTILEXPORTENTRY
+{
+    char szFuncName[ARKITLIB_STR_LEN];
+    DWORD dwFuncAddress;
+    BYTE cFuncData[ARKITLIB_BYTES_TO_FIX];
+}  ARKUTILEXPORTENTRY, *PARKUTILEXPORTENTRY;
+
 class ARKitLibUtils
 {
 public:
@@ -85,13 +92,16 @@ public:
     bool getNtFuncAddressByZwFuncName( std::string zwFuncName, std::string& ntFuncName, DWORD& dwNtAddress );
 
     // Walks export table of a DLL
-    bool exportWalker( std::string& dllFileName, std::list<std::string>& expFuncList );
+    bool exportWalker( std::string& dllFileName, std::list<ARKUTILEXPORTENTRY>& expFuncList, bool bReadFuncData );
 
     // Gets NT kernel name of the system
     bool getNtKernelName( std::string& ntKernelName );
 
     // Gets base address of a loaded driver
     bool getDriverBaseAddress( std::string& driverName, DWORD& dwBaseAddress );
+
+    // Gets first few bytes of a function from image
+    bool getFuncDataByName( std::string& funcName, PBYTE pFuncData, UINT unFuncDataSize );
 };
 
 #endif // __ARKITLIBUTILS_H__

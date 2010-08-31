@@ -306,7 +306,7 @@ NTSTATUS DrvDispatch( IN PDEVICE_OBJECT pDevice, IN PIRP pIrp )
                     {
                     case eArkKillProcess:
                         {
-                            PDWORD pdwPid = (PDWORD)(pFixData->fixData);
+                            PDWORD pdwPid = (PDWORD)(pFixData->cFixData);
                             if( KillProcess( pdwPid ) )
                             {
                                 retVal = STATUS_SUCCESS;
@@ -316,8 +316,18 @@ NTSTATUS DrvDispatch( IN PDEVICE_OBJECT pDevice, IN PIRP pIrp )
 
                     case eArkFixSsdtHook:
                         {
-                            PARKFIXSSDT pFixSsdtHookData = (PARKFIXSSDT)(pFixData->fixData);
+                            PARKFIXSSDT pFixSsdtHookData = (PARKFIXSSDT)(pFixData->cFixData);
                             if( FixSSDTHook( pFixSsdtHookData ) )
+                            {
+                                retVal = STATUS_SUCCESS;
+                            }
+                        }
+                        break;
+
+                    case eArkFixInlineHook:
+                        {
+                            PARKFIXINLINEHOOK pFixInlineHook = (PARKFIXINLINEHOOK)(pFixData->cFixData);
+                            if( FixInlineHook( pFixInlineHook ) )
                             {
                                 retVal = STATUS_SUCCESS;
                             }

@@ -477,3 +477,92 @@ VOID FixSSDTHookThread( PVOID pThrParam )
     }
     PsTerminateSystemThread( STATUS_SUCCESS );
 }
+
+BOOLEAN FixInlineHook( PARKFIXINLINEHOOK pFixInlineHook )
+{
+    BOOLEAN bRetVal = FALSE;
+    __try
+    {
+        if( MmIsAddressValid( pFixInlineHook ) )
+        {
+            // Create a thread to fix kernel inline hook
+            THRPARAMS stThrParams = {0};
+            stThrParams.pParam = pFixInlineHook;
+            stThrParams.dwParamLen = sizeof( PARKFIXINLINEHOOK );
+            if( STATUS_SUCCESS == ThreadSpooler( FixInlineHookThread, &stThrParams ) )
+            {
+                bRetVal = stThrParams.bResult;
+            }
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        bRetVal = FALSE;
+        DbgPrint( "Exception caught in FixInlineHook()" );
+    }
+    return bRetVal;
+}
+
+VOID FixInlineHookThread( PVOID pThrParam )
+{
+    __try
+    {
+        if( MmIsAddressValid( pThrParam ) )
+        {
+            PBYTE pbFuncPtr = NULL;
+            PTHRPARAMS pParams = (PTHRPARAMS)pThrParam;
+            PARKFIXINLINEHOOK pFixInlineHook = (PARKFIXINLINEHOOK)(pParams->pParam);
+
+            if( pFixInlineHook->dwFuncAddr )
+            {
+                // If we have got function address from user mode,
+                // then use it directly
+                pbFuncPtr = pbFuncPtr + pFixInlineHook->dwFuncAddr;
+            }
+            else
+            {
+                // Otherwise, get function address from its name
+                ANSI_STRING asFuncName;
+                UNICODE_STRING usFuncName;
+                RtlInitAnsiString( &asFuncName, pFixInlineHook->szFuncName );
+                RtlAnsiStringToUnicodeString( &usFuncName, &asFuncName, TRUE );
+                pbFuncPtr = MmGetSystemRoutineAddress( &usFuncName );
+                RtlFreeUnicodeString( &usFuncName );
+            }
+
+#ifdef ARKITDRV_DEBUG_PRINT
+            DbgPrint( "FixInlineHookThread: Function %s, address 0x%x", pFixInlineHook->szFuncName, pbFuncPtr );
+#endif // ARKITDRV_DEBUG_PRINT
+
+            if( MmIsAddressValid( pbFuncPtr ) )
+            {
+                UINT nIndex = 0;
+                KSPIN_LOCK kSpinLock;
+                KIRQL kSavedkIrql;
+
+                // Restore first few bytes of function atomically
+                KeInitializeSpinLock( &kSpinLock );
+                KeAcquireSpinLock( &kSpinLock, &kSavedkIrql );
+                for( nIndex = 0; nIndex < ARKITLIB_BYTES_TO_FIX; nIndex++ )
+                {
+                    if( MmIsAddressValid( pbFuncPtr + nIndex ) )
+                    {
+#ifdef ARKITDRV_DEBUG_PRINT
+                        DbgPrint( "Existing byte[%d] - %x, Restoring byte[%d] - %x", nIndex, pbFuncPtr[nIndex], nIndex, pFixInlineHook->cFuncData[nIndex] );
+#endif // ARKITDRV_DEBUG_PRINT
+                        pbFuncPtr[nIndex] = pFixInlineHook->cFuncData[nIndex];
+                    }
+                }
+                KeReleaseSpinLock( &kSpinLock, kSavedkIrql );
+
+                // Set result to true
+                pParams->bResult = TRUE;
+            }
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        DbgPrint( "Exception caught in FixInlineHookThread()" );
+    }
+    PsTerminateSystemThread( STATUS_SUCCESS );
+}
