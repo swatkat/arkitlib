@@ -1100,6 +1100,39 @@ DWORD GetJumpToAddr( PBYTE pbSrcAddr, int nOpCode )
 }
 
 /*++
+* @method: IsValidDeviceDriverObject
+*
+* @description: Checks if the specified device object, its driver object and driver section
+*               are valid
+*
+* @input: PDEVICE_OBJECT pDevObj
+*
+* @output: BOOLEAN
+*
+*--*/
+BOOLEAN IsValidDeviceDriverObject( PDEVICE_OBJECT pDevObj )
+{
+    BOOLEAN retVal = FALSE;
+    __try
+    {
+        if( MmIsAddressValid( pDevObj ) )
+        {
+            PDRIVER_OBJECT pDrvObj = pDevObj->DriverObject;
+            if( MmIsAddressValid( pDrvObj ) && MmIsAddressValid( pDrvObj->DriverSection ) )
+            {
+                retVal = TRUE;
+            }
+        }
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        retVal = FALSE;
+        DbgPrint( "Exception caught in IsValidDeviceDriverObject()" );
+    }
+    return retVal;
+}
+
+/*++
 * @method: NtZwTerminateProcess
 *
 * @description: Tries to kill process using NtTerminateProcess/ZwTerminateProcess

@@ -35,7 +35,7 @@ VOID TraverseVadTreeInOrderWin2K3Vista( PMMADDRESS_NODE pVadNode );
 UINT ScanAndGetDriverCount();
 VOID ScanAndGetDriverCountThread( PVOID pThrParam );
 NTSTATUS GetDriversByModuleEntryScan();
-NTSTATUS GetDriverByDeviceObjectScan();
+NTSTATUS GetDriverByDeviceObjectScan( PWCHAR pwszDeviceObjBaseDirectory );
 NTSTATUS GetDriverByDriverObjectScan();
 
 // SSDT routines
