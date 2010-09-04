@@ -548,7 +548,8 @@ VOID FixInlineHookThread( PVOID pThrParam )
                     if( MmIsAddressValid( pbFuncPtr + nIndex ) )
                     {
 #ifdef ARKITDRV_DEBUG_PRINT
-                        DbgPrint( "Existing byte[%d] - %x, Restoring byte[%d] - %x", nIndex, pbFuncPtr[nIndex], nIndex, pFixInlineHook->cFuncData[nIndex] );
+                        DbgPrint( "Existing byte[%d] - 0x%x, Restoring byte[%d] - 0x%x",
+                                  nIndex, pbFuncPtr[nIndex], nIndex, pFixInlineHook->cFuncData[nIndex] );
 #endif // ARKITDRV_DEBUG_PRINT
                         pbFuncPtr[nIndex] = pFixInlineHook->cFuncData[nIndex];
                     }

@@ -13,6 +13,9 @@ extern OS_SPEC_DATA g_globalData;
 extern NTOSKRNLDATA g_NtOSKernel;
 extern ARKNTAPI g_NtApiData;
 
+// NT externs
+extern POBJECT_TYPE *IoDeviceObjectType;
+
 /*++
 * @method: ScanAndGetDriverCount
 *
@@ -507,14 +510,14 @@ NTSTATUS GetDriverByDriverObjectScan()
                                                      NULL,
                                                      KernelMode,
                                                      NULL,
-                                                     0x80000000,
+                                                     GENERIC_READ,
                                                      NULL,
                                                      &hObject );
                         if( STATUS_SUCCESS == retVal )
                         {
                             // Get object from handle
                             retVal = ObReferenceObjectByHandle( hObject,
-                                                                0x80000000,
+                                                                GENERIC_READ,
                                                                 NULL,
                                                                 KernelMode,
                                                                 &pObject,
