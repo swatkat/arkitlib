@@ -92,6 +92,7 @@ VOID DisableReadOnly();
 VOID EnableReadOnly();
 BOOLEAN IsJumpOutsideKernel( DWORD dwJumpToAddr );
 DWORD GetJumpToAddr( PBYTE pbSrcAddr, int nOpCode );
+BOOLEAN IsValidDeviceDriverObject( PDEVICE_OBJECT pDevObj );
 NTSTATUS NtZwTerminateProcess( DWORD dwPid );
 NTSTATUS NtZwTerminateProcessByThreads( DWORD dwPid );
 

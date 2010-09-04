@@ -68,7 +68,7 @@ VOID ScanAndGetDriverCountThread( PVOID pThrParam )
                     GetDriversByModuleEntryScan();
 
                     // Get drivers by traversing \Device\ directory in Object Manager
-                    GetDriverByDeviceObjectScan();
+                    GetDriverByDeviceObjectScan( L"\\Device" );
 
                     // Get drivers by traversing \Driver\ directory in Object Manager
                     GetDriverByDriverObjectScan();
@@ -87,7 +87,7 @@ VOID ScanAndGetDriverCountThread( PVOID pThrParam )
 }
 
 /*++
-* @method: GetDriverByDeviceObjectScan
+* @method: GetDriversByModuleEntryScan
 *
 * @description: Gets loaded drivers by traversing PsLoadedModuleList
 *
@@ -196,12 +196,12 @@ NTSTATUS GetDriversByModuleEntryScan()
 *
 * @description: Gets loaded drivers by browsing \Device\ directory in Object Manager
 *
-* @input: None
+* @input: PWCHAR pwszDeviceObjBaseDirectory
 *
 * @output: NTSTATUS
 *
 *--*/
-NTSTATUS GetDriverByDeviceObjectScan()
+NTSTATUS GetDriverByDeviceObjectScan( PWCHAR pwszDeviceObjBaseDirectory )
 {
     NTSTATUS retVal = STATUS_UNSUCCESSFUL;
     __try
@@ -212,8 +212,22 @@ NTSTATUS GetDriverByDeviceObjectScan()
         PNTOPENDIRECTORYOBJECT pNtOpenDirectoryObject = NULL;
         PNTQUERYDIRECTORYOBJECT pNtQueryDirectoryObject = NULL;
 
+        if( MmIsAddressValid( pwszDeviceObjBaseDirectory ) )
+        {
+#ifdef ARKITDRV_DEBUG_PRINT
+            DbgPrint( "GetDriverByDeviceObjectScan: Device object base: %S", pwszDeviceObjBaseDirectory );
+#endif
+        }
+        else
+        {
+#ifdef ARKITDRV_DEBUG_PRINT
+            DbgPrint( "GetDriverByDeviceObjectScan: Invalid argument passed" );
+#endif // ARKITDRV_DEBUG_PRINT
+            return retVal;
+        }
+
         // Open Object Manager
-        RtlInitUnicodeString( &usDeviceObj, L"\\Device" );
+        RtlInitUnicodeString( &usDeviceObj, pwszDeviceObjBaseDirectory );
         InitializeObjectAttributes( &objAttr,
                                     &usDeviceObj,
                                     OBJ_CASE_INSENSITIVE,
@@ -285,42 +299,61 @@ NTSTATUS GetDriverByDeviceObjectScan()
                     pDirBasicInfo = (PDIRECTORY_BASIC_INFORMATION)szBuffer;
                     if( MmIsAddressValid( pDirBasicInfo ) && MmIsAddressValid( pDirBasicInfo->ObjectName.Buffer ) )
                     {
+#ifdef ARKITDRV_DEBUG_PRINT
+                        DbgPrint( "GetDriverByDeviceObjectScan: Object: %S, Type: %S",
+                                   pDirBasicInfo->ObjectName.Buffer, pDirBasicInfo->ObjectTypeName.Buffer );
+#endif // ARKITDRV_DEBUG_PRINT
+
                         // Construct name
                         RtlZeroMemory( wszObjName, ( sizeof( WCHAR )*ARKITLIB_STR_LEN ) );
-                        RtlStringCchCopyW( wszObjName, ARKITLIB_STR_LEN, L"\\Device\\" );
+                        RtlStringCchCopyW( wszObjName, ARKITLIB_STR_LEN, pwszDeviceObjBaseDirectory );
+                        RtlStringCchCatW( wszObjName, ARKITLIB_STR_LEN, L"\\" );
                         RtlStringCchCatW( wszObjName, ARKITLIB_STR_LEN, pDirBasicInfo->ObjectName.Buffer );
                         RtlInitUnicodeString( &usDeviceObj, wszObjName );
+
+                        // If the object type is Directory, then traverse it
+                        if( 0 == _wcsicmp( pDirBasicInfo->ObjectTypeName.Buffer, L"Directory" ) )
+                        {
+                            GetDriverByDeviceObjectScan( wszObjName );
+                            continue;
+                        }
+                        else if( _wcsicmp( pDirBasicInfo->ObjectTypeName.Buffer, L"Device" ) )
+                        {
+#ifdef ARKITDRV_DEBUG_PRINT
+                            DbgPrint( "GetDriverByDeviceObjectScan: Ignoring Object: %S, Type: %S",
+                                      pDirBasicInfo->ObjectName.Buffer, pDirBasicInfo->ObjectTypeName.Buffer );
+#endif // ARKITDRV_DEBUG_PRINT
+                            continue;
+                        }
+
+                        // Get device object pointer from device name
                         InitializeObjectAttributes( &objAttr,
                                                     &usDeviceObj,
                                                     OBJ_CASE_INSENSITIVE,
                                                     NULL, NULL );
-
-                        // Get device object pointer from device name
                         retVal = IoGetDeviceObjectPointer( &usDeviceObj, FILE_READ_DATA, &pFileObj, &pDevObj );
                         if( STATUS_SUCCESS == retVal )
                         {
-                            if( MmIsAddressValid( pDevObj ) )
+                            if( IsValidDeviceDriverObject( pDevObj ) )
                             {
                                 // Get driver object from device object
                                 pDrvObj = pDevObj->DriverObject;
-                                if( MmIsAddressValid( pDrvObj ) && MmIsAddressValid( pDrvObj->DriverSection ) )
-                                {
-                                    // Now, go to DriverSection and read driver details
-                                    pModEntry = (PMODULE_ENTRY)pDrvObj->DriverSection;
-                                    if( !IsDummyModuleEntry2( pModEntry ) )
-                                    {
-                                        // Copy driver details to our list entry
-                                        RtlZeroMemory( &drvEntry, sizeof( DRIVERLISTENTRY ) );
-                                        drvEntry.dwBase = pModEntry->imageBase;
-                                        drvEntry.dwEnd = pModEntry->imageBase + pModEntry->imageSize;
-                                        drvEntry.dwEntryPoint = pModEntry->entryPoint;
-                                        RtlUnicodeStringToAnsiString( &ansiDrvName, &( pModEntry->drvPath ), 1 );
-                                        RtlStringCchCopyA( drvEntry.szDrvName, ARKITLIB_STR_LEN, ansiDrvName.Buffer );
-                                        RtlFreeAnsiString( &ansiDrvName );
 
-                                        // Add it to our list
-                                        retVal = AddListEntry( eDrvList, &drvEntry, TRUE );
-                                    }
+                                // Now, go to DriverSection and read driver details
+                                pModEntry = (PMODULE_ENTRY)pDrvObj->DriverSection;
+                                if( !IsDummyModuleEntry2( pModEntry ) )
+                                {
+                                    // Copy driver details to our list entry
+                                    RtlZeroMemory( &drvEntry, sizeof( DRIVERLISTENTRY ) );
+                                    drvEntry.dwBase = pModEntry->imageBase;
+                                    drvEntry.dwEnd = pModEntry->imageBase + pModEntry->imageSize;
+                                    drvEntry.dwEntryPoint = pModEntry->entryPoint;
+                                    RtlUnicodeStringToAnsiString( &ansiDrvName, &( pModEntry->drvPath ), 1 );
+                                    RtlStringCchCopyA( drvEntry.szDrvName, ARKITLIB_STR_LEN, ansiDrvName.Buffer );
+                                    RtlFreeAnsiString( &ansiDrvName );
+                                    
+                                    // Add it to our list
+                                    retVal = AddListEntry( eDrvList, &drvEntry, TRUE );
                                 }
                             }
 
@@ -334,7 +367,8 @@ NTSTATUS GetDriverByDeviceObjectScan()
                         else
                         {
 #ifdef ARKITDRV_DEBUG_PRINT
-                            DbgPrint( "GetDriverByDeviceObjectScan: IoGetDeviceObjectPointer for %S, failed: 0x%x", usDeviceObj.Buffer, retVal );
+                            DbgPrint( "GetDriverByDeviceObjectScan: IoGetDeviceObjectPointer for %S, failed: 0x%x",
+                                      usDeviceObj.Buffer, retVal );
 #endif // ARKITDRV_DEBUG_PRINT
                         }
                     }
@@ -517,7 +551,8 @@ NTSTATUS GetDriverByDriverObjectScan()
                             else
                             {
 #ifdef ARKITDRV_DEBUG_PRINT
-                                DbgPrint( "GetDriverByDriverObjectScan: ObReferenceObjectByHandle for %S, failed: 0x%x", usDriverObj.Buffer, retVal );
+                                DbgPrint( "GetDriverByDriverObjectScan: ObReferenceObjectByHandle for %S, failed: 0x%x",
+                                          usDriverObj.Buffer, retVal );
 #endif // ARKITDRV_DEBUG_PRINT
                             }
                             ZwClose( hObject );
@@ -525,7 +560,8 @@ NTSTATUS GetDriverByDriverObjectScan()
                         else
                         {
 #ifdef ARKITDRV_DEBUG_PRINT
-                            DbgPrint( "GetDriverByDriverObjectScan: ObOpenObjectByName for %S, failed: 0x%x", usDriverObj.Buffer, retVal );
+                            DbgPrint( "GetDriverByDriverObjectScan: ObOpenObjectByName for %S, failed: 0x%x",
+                                      usDriverObj.Buffer, retVal );
 #endif // ARKITDRV_DEBUG_PRINT
                         }
                     }
