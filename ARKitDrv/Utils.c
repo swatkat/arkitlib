@@ -1117,8 +1117,7 @@ BOOLEAN IsValidDeviceDriverObject( PDEVICE_OBJECT pDevObj )
     {
         if( MmIsAddressValid( pDevObj ) )
         {
-            PDRIVER_OBJECT pDrvObj = pDevObj->DriverObject;
-            if( MmIsAddressValid( pDrvObj ) && MmIsAddressValid( pDrvObj->DriverSection ) )
+            if( MmIsAddressValid( pDevObj->DriverObject ) )
             {
                 retVal = TRUE;
             }

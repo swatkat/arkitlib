@@ -121,6 +121,7 @@ NTSTATUS AddListEntry( eListType eTypeOfList, PVOID pItemToAdd, BOOLEAN bFind )
         // Check if the entry is already present
         if( bFind && ( STATUS_SUCCESS == FindEntry( eTypeOfList, pItemToAdd ) ) )
         {
+            retVal = STATUS_DUPLICATE_OBJECTID;
             return retVal;
         }
 

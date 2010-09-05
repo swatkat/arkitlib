@@ -219,7 +219,7 @@ NTSTATUS GetDriverByDeviceObjectScan( PWCHAR pwszDeviceObjBaseDirectory )
         {
 #ifdef ARKITDRV_DEBUG_PRINT
             DbgPrint( "GetDriverByDeviceObjectScan: Device object base: %S", pwszDeviceObjBaseDirectory );
-#endif
+#endif // ARKITDRV_DEBUG_PRINT
         }
         else
         {
@@ -267,7 +267,6 @@ NTSTATUS GetDriverByDeviceObjectScan( PWCHAR pwszDeviceObjBaseDirectory )
             PDRIVER_OBJECT pDrvObj = NULL;
             PMODULE_ENTRY pModEntry = NULL;
             PDIRECTORY_BASIC_INFORMATION pDirBasicInfo = NULL;
-            ANSI_STRING ansiDrvName;
 
             while( 1 )
             {
@@ -351,9 +350,17 @@ NTSTATUS GetDriverByDeviceObjectScan( PWCHAR pwszDeviceObjBaseDirectory )
                                     drvEntry.dwBase = pModEntry->imageBase;
                                     drvEntry.dwEnd = pModEntry->imageBase + pModEntry->imageSize;
                                     drvEntry.dwEntryPoint = pModEntry->entryPoint;
-                                    RtlUnicodeStringToAnsiString( &ansiDrvName, &( pModEntry->drvPath ), 1 );
-                                    RtlStringCchCopyA( drvEntry.szDrvName, ARKITLIB_STR_LEN, ansiDrvName.Buffer );
-                                    RtlFreeAnsiString( &ansiDrvName );
+                                    RtlStringCchPrintfA( drvEntry.szDrvName, ARKITLIB_STR_LEN, "%S", pModEntry->drvPath.Buffer );
+                                    
+                                    // Add it to our list
+                                    retVal = AddListEntry( eDrvList, &drvEntry, TRUE );
+                                }
+                                else if( pDrvObj->DriverName.Length > 0 )
+                                {
+                                    // Copy driver details to our list entry
+                                    RtlZeroMemory( &drvEntry, sizeof( DRIVERLISTENTRY ) );
+                                    drvEntry.dwEntryPoint = (DWORD)(pDrvObj->DriverInit);
+                                    RtlStringCchPrintfA( drvEntry.szDrvName, ARKITLIB_STR_LEN, "%S", pDrvObj->DriverName.Buffer );
                                     
                                     // Add it to our list
                                     retVal = AddListEntry( eDrvList, &drvEntry, TRUE );
@@ -389,7 +396,8 @@ NTSTATUS GetDriverByDeviceObjectScan( PWCHAR pwszDeviceObjBaseDirectory )
         else
         {
 #ifdef ARKITDRV_DEBUG_PRINT
-            DbgPrint( "GetDriverByDeviceObjectScan: ZwOpenDirectoryObject failed: 0x%x", retVal );
+            DbgPrint( "GetDriverByDeviceObjectScan: ZwOpenDirectoryObject for %S failed: 0x%x",
+                      usDeviceObj.Buffer, retVal );
 #endif // ARKITDRV_DEBUG_PRINT
         }
     }
@@ -457,7 +465,6 @@ NTSTATUS GetDriverByDriverObjectScan()
             PMODULE_ENTRY pModEntry = NULL;
             char szBuffer[ARKITLIB_STR_LEN];
             WCHAR wszObjName[ARKITLIB_STR_LEN];
-            ANSI_STRING ansiDrvName;
             PDIRECTORY_BASIC_INFORMATION pDirBasicInfo = NULL;
             ULONG actualLen = 0;
             ULONG curPos = 0;
@@ -538,9 +545,17 @@ NTSTATUS GetDriverByDriverObjectScan()
                                         drvEntry.dwBase = pModEntry->imageBase;
                                         drvEntry.dwEnd = pModEntry->imageBase + pModEntry->imageSize;
                                         drvEntry.dwEntryPoint = pModEntry->entryPoint;
-                                        RtlUnicodeStringToAnsiString( &ansiDrvName, &( pModEntry->drvPath ), 1 );
-                                        RtlStringCchCopyA( drvEntry.szDrvName, ARKITLIB_STR_LEN, ansiDrvName.Buffer );
-                                        RtlFreeAnsiString( &ansiDrvName );
+                                        RtlStringCchPrintfA( drvEntry.szDrvName, ARKITLIB_STR_LEN, "%S", pModEntry->drvPath.Buffer );
+
+                                        // Add it to our list
+                                        retVal = AddListEntry( eDrvList, &drvEntry, TRUE );
+                                    }
+                                    else if( pDrvObj->DriverName.Length > 0 )
+                                    {
+                                        // Copy driver details to our list entry
+                                        RtlZeroMemory( &drvEntry, sizeof( DRIVERLISTENTRY ) );
+                                        drvEntry.dwEntryPoint = (DWORD)(pDrvObj->DriverInit);
+                                        RtlStringCchPrintfA( drvEntry.szDrvName, ARKITLIB_STR_LEN, "%S", pDrvObj->DriverName.Buffer );
 
                                         // Add it to our list
                                         retVal = AddListEntry( eDrvList, &drvEntry, TRUE );
@@ -582,7 +597,8 @@ NTSTATUS GetDriverByDriverObjectScan()
         else
         {
 #ifdef ARKITDRV_DEBUG_PRINT
-            DbgPrint( "GetDriverByDriverObjectScan: ZwOpenDirectoryObject failed: 0x%x", retVal );
+            DbgPrint( "GetDriverByDriverObjectScan: ZwOpenDirectoryObject for %S failed: 0x%x",
+                      usDeviceObj.Buffer, retVal );
 #endif // ARKITDRV_DEBUG_PRINT
         }
     }
